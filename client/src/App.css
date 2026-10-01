@@ -1,0 +1,29 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.App {
+  text-align: center;
+}
+
+/* Rule 4: the app shell fills exactly the viewport height and never more.
+   `min-height: 0` on the scrolling child is required for a flex child to be
+   allowed to shrink below its content size — without it the child grows and
+   pushes the page into overflow instead of scrolling internally. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh; /* accounts for mobile browser chrome */
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

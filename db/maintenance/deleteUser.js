@@ -1,0 +1,87 @@
+/**
+ * db/maintenance/deleteUser.js
+ *
+ * Deletes a user AND every row that belongs to them, across all four
+ * databases. The app has no delete-account feature, and deleting a `users` row
+ * by hand leaves their rows behind in bgtracker / meetings / communitylibrary
+ * (no foreign keys there), which later makes rebuildTable.js refuse to
+ * renumber `users`. Use this instead of a bare DELETE.
+ *
+ *   node db/maintenance/deleteUser.js <userName>            report only
+ *   node db/maintenance/deleteUser.js <userName> --apply    delete, in one transaction
+ *
+ * Deletes rows where user_id / doctor_id / patient_id equals the user's id
+ * (this includes their doctor_profiles row and any doctor<->patient links,
+ * whether they were the doctor or the patient), then the users row itself.
+ * Refuses to delete the last admin. Take a backup first. Irreversible.
+ */
+const { USER_COLS, q, qt, makePool, findRefColumns, isInnoDB, dbNames } = require('./idRefs');
+
+async function main(userName, apply) {
+  const gateway = dbNames().gateway;
+  const pool = makePool();
+  const conn = await pool.getConnection();
+  try {
+    const [users] = await conn.query(
+      `SELECT id, userName, firstName, lastName, role FROM ${qt(gateway, 'users')} WHERE userName = ?`, [userName]);
+    if (users.length === 0) throw new Error(`no user named "${userName}"`);
+    const u = users[0];
+    console.log(`User #${u.id}: ${u.userName} (${u.firstName} ${u.lastName}), role ${u.role}`);
+
+    if (u.role === 'admin') {
+      const [[a]] = await conn.query(`SELECT COUNT(*) AS n FROM ${qt(gateway, 'users')} WHERE role='admin' AND id <> ?`, [u.id]);
+      if (Number(a.n) === 0) throw new Error('refusing to delete the last admin account');
+    }
+
+    const refs = await findRefColumns(conn, USER_COLS);
+    const plan = [];
+    for (const r of refs) {
+      const [[c]] = await conn.query(
+        `SELECT COUNT(*) AS n FROM ${qt(r.schema, r.table)} WHERE ${q(r.column)} = ?`, [u.id]);
+      if (Number(c.n) > 0) plan.push({ ...r, n: Number(c.n) });
+    }
+
+    console.log(apply ? 'Deleting:' : 'Would delete (report only, nothing changed):');
+    for (const p of plan) console.log(`  ${p.schema}.${p.table}.${p.column}: ${p.n} row(s)`);
+    console.log(`  ${gateway}.users: 1 row`);
+
+    if (!apply) {
+      console.log('\nRe-run with --apply to delete (take a backup first; this cannot be undone).');
+      return;
+    }
+
+    const bad = plan.filter((p) => !isInnoDB(p));
+    if (bad.length) {
+      throw new Error(`refusing to --apply: not InnoDB, so a transaction could not undo changes: ` +
+        bad.map((b) => `${b.schema}.${b.table}`).join(', '));
+    }
+
+    await conn.beginTransaction();
+    try {
+      for (const p of plan) {
+        await conn.query(`DELETE FROM ${qt(p.schema, p.table)} WHERE ${q(p.column)} = ?`, [u.id]);
+      }
+      const [res] = await conn.query(`DELETE FROM ${qt(gateway, 'users')} WHERE id = ?`, [u.id]);
+      if (res.affectedRows !== 1) throw new Error('users row was not deleted');
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    }
+    console.log(`\nDeleted user ${u.userName} and all of their data.`);
+  } finally {
+    conn.release();
+    await pool.end();
+  }
+}
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const name = args.find((a) => !a.startsWith('--'));
+  if (!name) { console.error('Usage: node db/maintenance/deleteUser.js <userName> [--apply]'); process.exit(1); }
+  main(name, args.includes('--apply'))
+    .then(() => process.exit(0))
+    .catch((e) => { console.error('deleteUser failed:', e.message); process.exit(1); });
+}
+
+module.exports = main;

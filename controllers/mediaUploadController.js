@@ -1,0 +1,201 @@
+/**
+ * controllers/mediaUploadController.js
+ *
+ * Handles processing and storage of CommunityLibrary media (book covers,
+ * movie posters). Runs after middleware/upload.js has already populated
+ * req.file (if an image was sent).
+ *
+ * Storage layout:
+ *   books:  images/books/<sanitized-title>.webp
+ *   movies: images/movies/<media_type>/<sanitized-name>.webp
+ *
+ * If no file was uploaded, a themed placeholder is copied into the same
+ * target path instead, so every book/movie always has an image on disk.
+ */
+
+const fs   = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+const { sanitizeFilename } = require('../utils/sanitize');
+const { classifyCollection } = require('../utils/collectionFormat');
+
+const IMAGES_ROOT      = path.join(__dirname, '..', 'images');
+const PLACEHOLDERS_DIR = path.join(IMAGES_ROOT, 'placeholders');
+
+// Standard cover/poster dimensions — even sizing for consistent grid display
+const TARGET_WIDTH  = 400;
+const TARGET_HEIGHT = 600;
+const WEBP_QUALITY   = 82;
+
+/**
+ * Ensures a directory exists, creating it (and any missing parents)
+ * synchronously if it does not.
+ */
+function ensureDirSync(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+/**
+ * Resizes/converts an uploaded image buffer to a WebP file at destPath.
+ * Uses `fit: cover` so every cover/poster ends up exactly TARGET_WIDTH x
+ * TARGET_HEIGHT regardless of the source image's aspect ratio.
+ */
+async function processAndSaveImage(buffer, destPath) {
+  await sharp(buffer)
+    .resize(TARGET_WIDTH, TARGET_HEIGHT, { fit: 'cover', position: 'centre' })
+    .webp({ quality: WEBP_QUALITY })
+    .toFile(destPath);
+}
+
+/**
+ * Copies the correct "no image" placeholder to destPath.
+ * theme: 'light' | 'dark' (defaults to 'light')
+ * kind:  'book' | 'movie'
+ */
+function copyPlaceholder(kind, theme, destPath) {
+  const safeTheme = theme === 'dark' ? 'dark' : 'light';
+  const placeholderName = `no-${kind}-${safeTheme}.webp`;
+  const placeholderPath = path.join(PLACEHOLDERS_DIR, placeholderName);
+
+  if (!fs.existsSync(placeholderPath)) {
+    throw new Error(`Missing placeholder asset: ${placeholderName}`);
+  }
+  fs.copyFileSync(placeholderPath, destPath);
+}
+
+/**
+ * POST /communitylibrary/upload/book
+ * Body (multipart/form-data): title, theme? ; file field "image"?
+ */
+async function uploadBookImage(req, res) {
+  try {
+    const { title, theme } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const slug    = sanitizeFilename(title);
+    const destDir = path.join(IMAGES_ROOT, 'books');
+    ensureDirSync(destDir);
+
+    const destPath = path.join(destDir, `${slug}.webp`);
+    const webPath   = `/images/books/${slug}.webp`;
+
+    if (req.file && req.file.buffer) {
+      await processAndSaveImage(req.file.buffer, destPath);
+    } else {
+      copyPlaceholder('book', theme, destPath);
+    }
+
+    return res.json({ message: 'Book image saved', img_url: webPath });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * POST /communitylibrary/upload/movie
+ * Body (multipart/form-data): name, media_type, theme? ; file field "image"?
+ */
+async function uploadMovieImage(req, res) {
+  try {
+    const { name, media_type, theme } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    if (!media_type) {
+      return res.status(400).json({ error: 'media_type is required' });
+    }
+
+    const nameSlug  = sanitizeFilename(name);
+    const mediaSlug = sanitizeFilename(media_type); // e.g. 'dvd', 'streaming'
+    const destDir   = path.join(IMAGES_ROOT, 'movies', mediaSlug);
+    ensureDirSync(destDir);
+
+    const destPath = path.join(destDir, `${nameSlug}.webp`);
+    const webPath   = `/images/movies/${mediaSlug}/${nameSlug}.webp`;
+
+    if (req.file && req.file.buffer) {
+      await processAndSaveImage(req.file.buffer, destPath);
+    } else {
+      copyPlaceholder('movie', theme, destPath);
+    }
+
+    return res.json({ message: 'Movie image saved', img_url: webPath });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * POST /communitylibrary/upload/collection
+ * Body (multipart/form-data):
+ *   collectionTitle  — required, name of the box set / multi-feature
+ *   mediaType        — required, e.g. 'dvd', 'blu-ray'
+ *   movies           — required, JSON-encoded array of movie objects
+ *   theme            — optional, 'light' | 'dark'
+ *   file field "image" — optional cover artwork
+ *
+ * The backend recomputes collectionFormat from movies.length every time —
+ * client-submitted format labels are never trusted.
+ */
+async function uploadCollectionImage(req, res) {
+  try {
+    const { collectionTitle, mediaType, theme } = req.body;
+
+    if (!collectionTitle) {
+      return res.status(400).json({ error: 'collectionTitle is required' });
+    }
+    if (!mediaType) {
+      return res.status(400).json({ error: 'mediaType is required' });
+    }
+
+    let movies;
+    try {
+      movies = typeof req.body.movies === 'string'
+        ? JSON.parse(req.body.movies)
+        : req.body.movies;
+    } catch {
+      return res.status(400).json({ error: 'movies must be a valid JSON array' });
+    }
+    if (!Array.isArray(movies) || movies.length === 0) {
+      return res.status(400).json({ error: 'movies must be a non-empty array' });
+    }
+
+    let format;
+    try {
+      format = classifyCollection(movies.length);
+    } catch (classifyErr) {
+      return res.status(400).json({ error: classifyErr.message });
+    }
+
+    const nameSlug = sanitizeFilename(collectionTitle);
+    const destDir  = path.join(IMAGES_ROOT, 'movies', format.slug);
+    ensureDirSync(destDir);
+
+    const destPath = path.join(destDir, `${nameSlug}.webp`);
+    const webPath  = `/images/movies/${format.slug}/${nameSlug}.webp`;
+
+    if (req.file && req.file.buffer) {
+      await processAndSaveImage(req.file.buffer, destPath);
+    } else {
+      copyPlaceholder('movie', theme, destPath);
+    }
+
+    return res.json({
+      message: 'Collection image saved',
+      img_url: webPath,
+      collectionFormat: format.label,
+      movieCount: format.count,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = {
+  uploadBookImage, uploadMovieImage, uploadCollectionImage,
+  ensureDirSync, copyPlaceholder, processAndSaveImage,
+};

@@ -1,0 +1,8 @@
+-- DEPRECATED. This file is stale and nothing uses it.
+--
+-- The server creates and maintains every database and table itself at start-up
+-- (db/init.js, mirrored in db/db.js), and existing installs are brought up to date
+-- with db/maintenance/migrateAllSchemas.js. Use those; do not run this file.
+--
+-- The old contents were removed in 1.10.12 because they no longer matched the real
+-- schema (they predate the NOT NULL tightening, the doctor/clinic tables and more).
