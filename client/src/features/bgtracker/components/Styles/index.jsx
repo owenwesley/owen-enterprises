@@ -76,22 +76,48 @@ export const addButtonSx = {
   '&:hover': { backgroundColor: '#283593' },
 };
 
-// Add button for the BG readings table. Green when the most recent reading has
-// evening or bedtime meds checked, faded red when not. Same look as the old
-// styled AddButton: hover keeps the same color, and it still calls onAdd when
-// clicked (the faded look and not-allowed cursor are a hint, not a disable).
-export const addReadingButtonSx = (readings) => {
+// Add button for the BG readings table. It is truly disabled (faded red,
+// with a hint) until the most recent reading is "finished":
+//  - If any Meds boxes are shown (breakfast, lunch, dinner and/or bedtime, so
+//    1 to 4 a day), EVERY visible Meds box on that reading must be checked.
+//  - If no Meds boxes are shown, the day's LAST Sugar reading (the last sugar
+//    column in the table) must be entered (greater than 0). Sugar is used
+//    because 0 is a normal value for carbs and insulin, which would lock a user
+//    out of adding rows.
+// With no readings yet the button is always enabled, so the first one can be
+// added. The state follows the saved reading, not an unsaved edit.
+export const addReadingState = (readings, columns = []) => {
   const last = readings?.[readings.length - 1];
-  const medsGiven = Boolean(last?.chkMedsD || last?.chkMedsBed);
-  const bg = medsGiven ? 'lightgreen' : 'lightcoral';
+  if (!last) return { disabled: false, hint: '' };
+
+  const medsProps = columns.map((c) => c.prop).filter((p) => /^chkMeds/.test(p));
+  if (medsProps.length > 0) {
+    const allGiven = medsProps.every((p) => Boolean(last[p]));
+    return {
+      disabled: !allGiven,
+      hint: allGiven ? '' : 'Check all of your Meds boxes on your latest reading, and save it, before adding another.',
+    };
+  }
+
+  const sugarProps = columns.map((c) => c.prop).filter((p) => /^sugar/.test(p));
+  if (sugarProps.length === 0) return { disabled: false, hint: '' };
+  const lastSugar = sugarProps[sugarProps.length - 1];
+  const entered = Number(last[lastSugar]) > 0;
+  return {
+    disabled: !entered,
+    hint: entered ? '' : 'Enter your last sugar reading for the day on your latest row, and save it, before adding another.',
+  };
+};
+
+export const addReadingButtonSx = (disabled) => {
+  const bg = disabled ? 'lightcoral' : 'lightgreen';
   return {
     backgroundColor: bg,
     p: '5px',
     mb: '10px',
     border: 'none',
-    cursor: medsGiven ? 'pointer' : 'not-allowed',
-    opacity: medsGiven ? 1 : 0.5,
     '&:hover': { backgroundColor: bg },
+    '&.Mui-disabled': { backgroundColor: bg, color: '#fff', opacity: 0.5 },
   };
 };
 

@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.0** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.3** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,20 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.3** — BG Add button now requires ALL visible Meds boxes, not just dinner/bedtime.
+- `addReadingState` (`Styles/index.jsx`): if any Meds column is shown (breakfast, lunch, dinner and/or bedtime, 1 to 4 a day), every visible Meds box on the latest saved reading must be checked before Add enables. Hidden Meds slots are ignored. With no Meds columns the 1.11.2 rule still applies (last Sugar value greater than 0). No readings yet -> always enabled.
+- Side effect: a user who deliberately skips a dose cannot add the next row until the box is ticked (or the row is edited). Checked: rule tested in Node (9 cases), `vite build` passes. Not checked in a browser.
+
+**1.11.2** — BG Add button also waits for the last entry when there are no Meds boxes.
+- `addReadingState` (`Styles/index.jsx`): no readings yet -> enabled. If a dinner/bedtime Meds column is shown, one of those boxes must be checked (as in 1.11.1). If there are no such Meds boxes, the latest reading's LAST Sugar value (last `sugar*` column, e.g. bedtime sugar at 5/day, breakfast sugar at 1/day) must be greater than 0. Carbs and insulin are not used because 0 is a valid value there and would lock a user out.
+- Side effect to know: a day with a missed final sugar reading blocks Add until a value is entered on that row. Checked: rule tested in Node (9 cases), `vite build` passes. Not checked in a browser.
+
+**1.11.1** — BG readings Add button is now truly disabled when it should be.
+- Rule (`addReadingState` in `Styles/index.jsx`): if the user tracks dinner or bedtime meds (a `chkMedsD` / `chkMedsBed` column is shown) and the most recent reading has neither checked, the Add button is disabled (faded red, tooltip "Check Meds on your latest reading before adding another."). Otherwise it is enabled (green).
+- It is always enabled when meds are not tracked or when there are no readings yet, so a user can never be locked out of adding a reading. Before, the button looked faded red in those cases but still added on click.
+- `BGTable.jsx`: new `AddReadingButton` used by both header layouts. `addReadingButtonSx` now takes a `disabled` boolean. The state follows the saved reading: tick Meds on the new row and press ✓ to save, then Add enables.
+- Checked: rule tested in Node (8 cases) and `vite build` passes. Not checked in a browser (disabled look, tooltip, enabling after saving a meds edit).
 
 **1.11.0** — Client moved from Create React App (react-scripts 4) to Vite 5. No feature or behavior changes.
 - `client/index.html` (moved out of `public/`) loads `src/index.jsx`; `src/index.js` and `src/App.js` renamed to `.jsx`. `client/public/` removed (it held only `index.html`).

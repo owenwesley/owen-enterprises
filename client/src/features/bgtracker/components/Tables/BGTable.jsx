@@ -9,9 +9,27 @@ import TableRow from '@mui/material/TableRow';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import EditIcon from '@mui/icons-material/Edit';
-import { tableSx, useHeaderRowOffset, addReadingButtonSx } from '../Styles';
+import { tableSx, useHeaderRowOffset, addReadingButtonSx, addReadingState } from '../Styles';
 import { editBannerSx } from '../Styles/editMode';
 import Row from './Row';
+
+// Add button shared by both header layouts. Disabled (with a hint) when the
+// latest reading still needs its meds checked; see addReadingState.
+function AddReadingButton({ onAdd, readings, columns }) {
+  const { disabled, hint } = addReadingState(readings, columns);
+  return (
+    <span title={hint} style={{ display: 'inline-block', cursor: disabled ? 'not-allowed' : 'default' }}>
+      <Button
+        sx={addReadingButtonSx(disabled)}
+        variant="contained"
+        disabled={disabled}
+        onClick={onAdd}
+      >
+        Add
+      </Button>
+    </span>
+  );
+}
 
 // ── Single-row header (timesPD 1 or 2) ───────────────────────────────────────
 function FlatHeader({ columns, onAdd, readings }) {
@@ -22,9 +40,7 @@ function FlatHeader({ columns, onAdd, readings }) {
           <TableCell key={i} align="center">{col.name}</TableCell>
         ))}
         <TableCell align="center">
-          <Button sx={addReadingButtonSx(readings)} variant="contained" onClick={onAdd}>
-            Add
-          </Button>
+          <AddReadingButton onAdd={onAdd} readings={readings} columns={columns} />
         </TableCell>
       </TableRow>
     </TableHead>
@@ -55,9 +71,7 @@ function GroupedHeader({ groups, columns, onAdd, readings }) {
           </TableCell>
         ))}
         <TableCell rowSpan={2} align="center">
-          <Button sx={addReadingButtonSx(readings)} variant="contained" onClick={onAdd}>
-            Add
-          </Button>
+          <AddReadingButton onAdd={onAdd} readings={readings} columns={columns} />
         </TableCell>
       </TableRow>
 
