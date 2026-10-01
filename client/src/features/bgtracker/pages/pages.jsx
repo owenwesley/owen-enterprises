@@ -11,21 +11,11 @@ import TableMeds      from '../components/Tables/TableMeds';
 import { BGChart, BPChart, A1CChart, WeightChart } from '../components/Charts';
 import Preferences    from '../components/Preferences';
 import Help           from '../components/Help';
-import { MED_COLUMNS, WEIGHT_COLUMNS } from '../components/Tables/buildColumns';
-
-const BP_HEADER = [
-  { name: 'Date',           prop: 'date', type: 'date'   },
-  { name: 'SYS (Top BP)',   prop: 'hbp',  type: 'number' },
-  { name: 'DIAS (Bot BP)',  prop: 'lbp',  type: 'number' },
-  { name: 'HR',             prop: 'hr',   type: 'number' },
-  { name: 'SYS (Top BP)',   prop: 'hbp2', type: 'number' },
-  { name: 'DIAS (Bot BP)',  prop: 'lbp2', type: 'number' },
-  { name: 'HR',             prop: 'hr2',  type: 'number' },
-];
+import { MED_COLUMNS, WEIGHT_COLUMNS, bpColumnsFor } from '../components/Tables/buildColumns';
 
 export function BloodPressurePage() {
   const { state } = useAppContext();
-  const { A1C, editIdx } = state;
+  const { A1C, editIdx, preference } = state;
   const { bloodpressures, getBloodPressures, addBP, handleBPChange, startEditingBP, stopEditingBP, cancelEditingBP, editDraft } = useBloodPressure();
 
   useEffect(() => {
@@ -34,7 +24,7 @@ export function BloodPressurePage() {
 
   return (
     <TableOneBP add={addBP} A1C={A1C} editIdx={editIdx}
-      bloodpressures={bloodpressures} header={BP_HEADER}
+      bloodpressures={bloodpressures} header={bpColumnsFor(preference.timesPD)}
       handleChange={handleBPChange} startEditing={startEditingBP} stopEditing={stopEditingBP}
       cancelEditing={cancelEditingBP} editDraft={editDraft} />
   );

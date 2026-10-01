@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.3** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.4** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,12 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.4** — Blood pressure table shows one reading set when you log once a day.
+- `buildColumns.js`: new `BP_COLUMNS_ONE` (Date, SYS, DIAS, HR) and `bpColumnsFor(timesPD)`: 1 reading a day gives the one-set header, anything else keeps the two-set header (SYS/DIAS/HR twice).
+- `ReadingsPage.jsx` (the `/` page, shown as the BP table when `chkBP` is on and `timesPD` is 1 or 2) and `pages.jsx` (`BloodPressurePage`, `/bptracker`) now take their header from `bpColumnsFor(preference.timesPD)`; the two hard-coded `BP_HEADER` copies are gone. This restores what the pre-refactor `Tables.jsx` did for `timesPD === 1`.
+- No server or database change. The second-reading columns (`hbp2`, `lbp2`, `hr2`, NOT NULL) are still saved as 0 on add and kept unchanged on edit, so switching back to two a day loses nothing; the BP average already skips empty second readings. The BP chart still draws the second-reading lines (flat at 0) for a one-a-day user.
+- Checked: header helper tested in Node (7 cases), `TableOneBP` server-rendered for `timesPD` 1 (4 columns) and 2 (7 columns), `vite build` passes. Not checked in a browser.
 
 **1.11.3** — BG Add button now requires ALL visible Meds boxes, not just dinner/bedtime.
 - `addReadingState` (`Styles/index.jsx`): if any Meds column is shown (breakfast, lunch, dinner and/or bedtime, 1 to 4 a day), every visible Meds box on the latest saved reading must be checked before Add enables. Hidden Meds slots are ignored. With no Meds columns the 1.11.2 rule still applies (last Sugar value greater than 0). No readings yet -> always enabled.

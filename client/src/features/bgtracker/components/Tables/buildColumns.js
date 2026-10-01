@@ -76,7 +76,7 @@ export function buildColumns(pref) {
   return { groups, columns };
 }
 
-// BP header columns (static – used when chkBP is active)
+// BP header columns (static – used when chkBP is active): two readings a day.
 export const BP_COLUMNS = [
   { name: 'Date',           prop: 'date', type: 'date'   },
   { name: 'SYS (Top BP)',   prop: 'hbp',  type: 'number' },
@@ -86,6 +86,17 @@ export const BP_COLUMNS = [
   { name: 'DIAS (Bot BP)',  prop: 'lbp2', type: 'number' },
   { name: 'HR',             prop: 'hr2',  type: 'number' },
 ];
+
+// One reading a day (timesPD 1): only the first SYS / DIAS / HR set is shown.
+// The hbp2 / lbp2 / hr2 columns still exist in the database (NOT NULL, saved
+// as 0 on add) and an edit keeps whatever they hold, so switching back to two
+// readings a day loses nothing.
+export const BP_COLUMNS_ONE = BP_COLUMNS.slice(0, 4);
+
+// Header for the blood pressure table: one reading set when timesPD is 1,
+// otherwise (2 a day, or the BP page of a 3+ a day user) both sets.
+export const bpColumnsFor = (timesPD) =>
+  Number(timesPD) === 1 ? BP_COLUMNS_ONE : BP_COLUMNS;
 
 // Medication header columns (static)
 export const MED_COLUMNS = [

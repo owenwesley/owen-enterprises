@@ -2,22 +2,12 @@ import React, { useEffect } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { useReadings }   from '../hooks/useReadings';
 import { useBloodPressure } from '../hooks/useBloodPressure';
-import { buildColumns }  from '../components/Tables/buildColumns';
+import { buildColumns, bpColumnsFor } from '../components/Tables/buildColumns';
 import BGTable           from '../components/Tables/BGTable';
 import TableOneBP        from '../components/Tables/TableOneBP';
 import Box              from '@mui/material/Box';
 import { readingsPageSx } from '../components/Styles';
 import { filterLastNDays } from '../../../utils/dateFormat';
-
-const BP_HEADER = [
-  { name: 'Date',           prop: 'date', type: 'date'   },
-  { name: 'SYS (Top BP)',   prop: 'hbp',  type: 'number' },
-  { name: 'DIAS (Bot BP)',  prop: 'lbp',  type: 'number' },
-  { name: 'HR',             prop: 'hr',   type: 'number' },
-  { name: 'SYS (Top BP)',   prop: 'hbp2', type: 'number' },
-  { name: 'DIAS (Bot BP)',  prop: 'lbp2', type: 'number' },
-  { name: 'HR',             prop: 'hr2',  type: 'number' },
-];
 
 export default function ReadingsPage() {
   const { state } = useAppContext();
@@ -39,7 +29,7 @@ export default function ReadingsPage() {
       <Box sx={readingsPageSx(A1C)}>
         <TableOneBP
           add={addBP} A1C={A1C} editIdx={editIdx}
-          bloodpressures={bloodpressures} header={BP_HEADER}
+          bloodpressures={bloodpressures} header={bpColumnsFor(timesPD)}
           handleChange={handleBPChange}
           startEditing={startEditingBP} stopEditing={stopEditingBP}
           cancelEditing={cancelEditingBP} editDraft={bpEditDraft}
