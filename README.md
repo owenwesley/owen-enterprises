@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.4** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.5** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,15 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.5** — Nutrition table headers now follow readings per day (`timesPD`), restored from the older NavBar.
+- New `components/Tables/nutritionColumns.js`: `nutritionSlotsFor(timesPD)` and `buildNutritionColumns(timesPD)` return the meal slots and the grouped header. 3 a day: Breakfast, Lunch, Dinner. 4 a day: + Bedtime (`Bed`). 5 a day: Breakfast, Lunch, Dinner, Before Bed (`BB`), Bedtime. Nutrition is only offered at 3+ a day, so any other value falls back to the 3-meal layout. Each meal has the same 18 columns with units (Food Name, Calories, Saturated (g), Trans (g), Polyunsaturated (g), Monosaturated (g), Cholesterol (mg), Sodium (mg), Carbs (g), Fiber (g), Sugars (g), Protein (g), A/C/D (mcg), Calcium/Iron/Potassium (mg)).
+- New `components/Tables/NutritionTable.jsx`: two-row header (meal name over its 18 columns, a green "Day Total" group first), pinned Date column with the edit pencil. Read-only; editing still uses the dialog, so a 54/72/90-column row is never edited inline on a phone. `NutritionPage.jsx` uses it, and its edit dialog now shows only the active meals as tabs, with the unit labels.
+- `useNutrition.js`: `MEAL_SLOTS` / `NUTRIENT_FIELDS` are now built from `nutritionColumns.js` (same keys, so `emptyNutrition` still makes the same 92 fields). `dailyTotal(row, key, slots)` takes the visible slots, so the Day Total matches the columns on screen; the default is still all five. The "Bed" tab label is now "Bedtime".
+- Replaces the 1.10.x note that this layout was "not applied": it was scoped as a table header change plus a read-only table, not as three duplicate tables or inline editing.
+- No server or database change. Meals hidden after lowering `timesPD` keep their stored values (an edit merges over the stored row) but are not shown or counted in the Day Total.
+- **Open question, not changed:** the BG readings table maps 2 a day to Breakfast + Before Bed and 4 a day to Breakfast, Lunch, Dinner, Before Bed (`SLOTS_FOR_TIMES` in `buildColumns.js`); the older `Tables.jsx` used Breakfast + Lunch at 2 a day and Breakfast, Lunch, Dinner, Bedtime at 4 a day. As written, bedtime Meds (`chkMedsBed`) cannot show at 4 a day. Nutrition follows the older file, so at 4 a day its last meal is Bedtime while the BG table's is Before Bed.
+- Checked: slot lists and column counts (54/72/90) tested in Node, every column maps to a real `nutritions` field, `NutritionTable` server-rendered for `timesPD` 3, 4 and 5 (header groups, totals, Bedtime data hidden at 3), `vite build` passes. Not checked in a browser or on a phone.
 
 **1.11.4** — Blood pressure table shows one reading set when you log once a day.
 - `buildColumns.js`: new `BP_COLUMNS_ONE` (Date, SYS, DIAS, HR) and `bpColumnsFor(timesPD)`: 1 reading a day gives the one-set header, anything else keeps the two-set header (SYS/DIAS/HR twice).

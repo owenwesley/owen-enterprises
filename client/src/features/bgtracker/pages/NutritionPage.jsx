@@ -1,11 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import Paper from '@mui/material/Paper';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -15,36 +8,34 @@ import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import EditIcon from '@mui/icons-material/Edit';
 import { useAppContext } from '../../../context/AppContext';
-import { useNutrition, MEAL_SLOTS, NUTRIENT_FIELDS, dailyTotal } from '../hooks/useNutrition';
-import { formatDate, toDateInputValue } from '../../../utils/dateFormat';
+import { useNutrition, NUTRIENT_FIELDS } from '../hooks/useNutrition';
+import { nutritionSlotsFor } from '../components/Tables/nutritionColumns';
+import NutritionTable from '../components/Tables/NutritionTable';
+import { formatDate } from '../../../utils/dateFormat';
 
 const sxStyles = {
   root:      { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
   toolbar:   { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' },
-  th:        { backgroundColor: '#1a237e', color: '#fff', fontWeight: 700 },
   addBtn:    { backgroundColor: '#1a237e', color: '#fff', '&:hover': { backgroundColor: '#283593' } },
-  saveIcon:  { color: '#1a237e', cursor: 'pointer' },
-  editIcon:  { color: '#555',    cursor: 'pointer' },
   field:     { marginBottom: 10 },
-  totalCell: { fontWeight: 700, color: '#1b5e20' },
 };
 
 // `row` is the isolated edit draft (falls back to the stored row before any
 // edit is made) — the dialog reads and writes only the draft, never the
 // shared nutritions array directly, so a background refetch mid-edit can't
 // retarget the dialog at the wrong row or wipe unsaved keystrokes.
-function MealDialog({ open, row, onClose, onChange, onSave }) {
+function MealDialog({ open, row, slots, onClose, onChange, onSave }) {
   const [tab, setTab] = useState(0);
   if (!row) return null;
-  const slot = MEAL_SLOTS[tab];
+  // Only the meals the table shows (timesPD); clamp in case timesPD shrank.
+  const slot = slots[Math.min(tab, slots.length - 1)];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Edit Nutrition — {formatDate(row.date)}</DialogTitle>
-      <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
-        {MEAL_SLOTS.map((s) => <Tab key={s.key} label={s.label} />)}
+      <Tabs value={Math.min(tab, slots.length - 1)} onChange={(e, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
+        {slots.map((s) => <Tab key={s.key} label={s.label} />)}
       </Tabs>
       <DialogContent>
         {NUTRIENT_FIELDS.map((f) => {
@@ -73,7 +64,8 @@ function MealDialog({ open, row, onClose, onChange, onSave }) {
 
 export default function NutritionPage() {
   const { state } = useAppContext();
-  const { user } = state;
+  const { user, preference } = state;
+  const slots = nutritionSlotsFor(preference.timesPD);
   const {
     nutritions, editIdx, editDraft,
     getNutritions, addNutrition,
@@ -120,58 +112,19 @@ export default function NutritionPage() {
         </Button>
       </div>
 
-      <Paper elevation={2}>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={sxStyles.th}>Date</TableCell>
-                <TableCell sx={sxStyles.th} align="center">Total Calories</TableCell>
-                <TableCell sx={sxStyles.th} align="center">Total Carbs</TableCell>
-                <TableCell sx={sxStyles.th} align="center">Total Protein</TableCell>
-                <TableCell sx={sxStyles.th} align="center" style={{ width: 100 }} />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {nutritions.map((row) => {
-                const editing = editIdx === row.id;
-                const src = editing && editDraft ? editDraft : row;
-                return (
-                  <TableRow key={row.id} hover>
-                    <TableCell>
-                      {editing ? (
-                        <TextField
-                          size="small"
-                          type="date"
-                          InputLabelProps={{ shrink: true }}
-                          value={toDateInputValue(src.date)}
-                          onChange={(e) => handleNutritionChange(e, 'date', row.id)}
-                        />
-                      ) : formatDate(row.date)}
-                    </TableCell>
-                    <TableCell align="center" sx={sxStyles.totalCell}>
-                      {dailyTotal(row, 'calories').toFixed(0)}
-                    </TableCell>
-                    <TableCell align="center" sx={sxStyles.totalCell}>
-                      {dailyTotal(row, 'carbs').toFixed(0)}g
-                    </TableCell>
-                    <TableCell align="center" sx={sxStyles.totalCell}>
-                      {dailyTotal(row, 'protein').toFixed(1)}g
-                    </TableCell>
-                    <TableCell align="center">
-                      <EditIcon sx={sxStyles.editIcon} onClick={() => openEdit(row.id)} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+      <NutritionTable
+        nutritions={nutritions}
+        timesPD={preference.timesPD}
+        editIdx={editIdx}
+        editDraft={editDraft}
+        onEdit={openEdit}
+        onDateChange={(e, rowId) => handleNutritionChange(e, 'date', rowId)}
+      />
 
       <MealDialog
         open={dialogRowId !== null}
         row={dialogRow}
+        slots={slots}
         onClose={handleClose}
         onChange={handleDialogChange}
         onSave={handleSave}

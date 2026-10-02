@@ -2,35 +2,14 @@ import { useCallback } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { getFetch, postFetch } from '../../../utils/api';
 import { todayFormatted } from '../../../utils/dateFormat';
+import { NUTRITION_SLOTS, NUTRIENT_HEADERS } from '../components/Tables/nutritionColumns';
 
-export const MEAL_SLOTS = [
-  { key: 'B',   label: 'Breakfast' },
-  { key: 'L',   label: 'Lunch'     },
-  { key: 'D',   label: 'Dinner'    },
-  { key: 'BB',  label: 'Before Bed'},
-  { key: 'Bed', label: 'Bed'       },
-];
+// Slot and column definitions live in components/Tables/nutritionColumns.js (the
+// header is built from them). MEAL_SLOTS is every slot the database stores;
+// the table and dialog only show the ones nutritionSlotsFor(timesPD) returns.
+export const MEAL_SLOTS = NUTRITION_SLOTS;
 
-export const NUTRIENT_FIELDS = [
-  { key: 'foodName',        label: 'Food',           type: 'text'   },
-  { key: 'calories',        label: 'Calories',       type: 'number' },
-  { key: 'saturated',       label: 'Saturated Fat',  type: 'number' },
-  { key: 'trans',           label: 'Trans Fat',      type: 'number' },
-  { key: 'polyunsaturated', label: 'Polyunsaturated',type: 'number' },
-  { key: 'monosaturated',   label: 'Monosaturated',  type: 'number' },
-  { key: 'cholesterol',     label: 'Cholesterol',    type: 'number' },
-  { key: 'sodium',          label: 'Sodium',         type: 'number' },
-  { key: 'carbs',           label: 'Carbs',          type: 'number' },
-  { key: 'fiber',           label: 'Fiber',          type: 'number' },
-  { key: 'sugars',          label: 'Sugars',         type: 'number' },
-  { key: 'protein',         label: 'Protein',        type: 'number' },
-  { key: 'vitaminA',        label: 'Vitamin A',      type: 'number' },
-  { key: 'vitaminC',        label: 'Vitamin C',      type: 'number' },
-  { key: 'vitaminD',        label: 'Vitamin D',      type: 'number' },
-  { key: 'calcium',         label: 'Calcium',        type: 'number' },
-  { key: 'iron',            label: 'Iron',           type: 'number' },
-  { key: 'potassium',       label: 'Potassium',      type: 'number' },
-];
+export const NUTRIENT_FIELDS = NUTRIENT_HEADERS.map(({ key, name, type }) => ({ key, label: name, type }));
 
 /** Builds an empty nutrition row with all 90 macro fields defaulted */
 export function emptyNutrition(user_id) {
@@ -44,9 +23,13 @@ export function emptyNutrition(user_id) {
   return row;
 }
 
-/** Sums a given nutrient across all 5 meal slots for a row (e.g. total calories for the day) */
-export function dailyTotal(row, nutrientKey) {
-  return MEAL_SLOTS.reduce((sum, { key: suffix }) => {
+/**
+ * Sums a nutrient across meal slots for a row (e.g. total calories for the day).
+ * `slots` defaults to all 5; the Nutrition table passes only the slots it shows,
+ * so the total matches the columns on screen.
+ */
+export function dailyTotal(row, nutrientKey, slots = MEAL_SLOTS) {
+  return slots.reduce((sum, { key: suffix }) => {
     const v = parseFloat(row[`${nutrientKey}${suffix}`] || 0);
     return sum + (isNaN(v) ? 0 : v);
   }, 0);
