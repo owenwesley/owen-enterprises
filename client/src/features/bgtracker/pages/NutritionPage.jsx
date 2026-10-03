@@ -115,6 +115,7 @@ export default function NutritionPage() {
       <NutritionTable
         nutritions={nutritions}
         timesPD={preference.timesPD}
+        calorieGoal={preference.calorieGoal}
         editIdx={editIdx}
         editDraft={editDraft}
         onEdit={openEdit}

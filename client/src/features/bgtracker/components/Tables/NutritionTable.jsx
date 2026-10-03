@@ -10,6 +10,7 @@ import TextField from '@mui/material/TextField';
 import EditIcon from '@mui/icons-material/Edit';
 import { buildNutritionColumns, NUTRIENT_HEADERS } from './nutritionColumns';
 import { dailyTotal } from '../../hooks/useNutrition';
+import { calorieStatus, caloriesLeftLabel, CALORIE_TINT, CALORIE_TEXT } from '../../utils/calorieGoal';
 import { formatDate, toDateInputValue } from '../../../../utils/dateFormat';
 
 const PER_SLOT = NUTRIENT_HEADERS.length;
@@ -38,9 +39,11 @@ const sx = {
  * Read-only: the pencil next to the date opens the edit dialog.
  */
 export default function NutritionTable({
-  nutritions, timesPD, editIdx, editDraft, onEdit, onDateChange,
+  nutritions, timesPD, calorieGoal = 0, editIdx, editDraft, onEdit, onDateChange,
 }) {
   const { slots, groups, columns } = useMemo(() => buildNutritionColumns(timesPD), [timesPD]);
+  const goal = Number(calorieGoal) || 0;       // 0 = no goal: no Left column, no colours
+  const totalSpan = goal > 0 ? 4 : 3;
 
   return (
     <Paper elevation={2}>
@@ -49,7 +52,9 @@ export default function NutritionTable({
           <TableHead>
             <TableRow>
               <TableCell rowSpan={2} sx={sx.dateHead}>Date</TableCell>
-              <TableCell colSpan={3} align="center" sx={sx.totalHead}>Day Total</TableCell>
+              <TableCell colSpan={totalSpan} align="center" sx={sx.totalHead}>
+                {goal > 0 ? `Day Total (goal ${goal.toLocaleString()})` : 'Day Total'}
+              </TableCell>
               {groups.map((g, gi) => (
                 <TableCell
                   key={g.key}
@@ -65,6 +70,7 @@ export default function NutritionTable({
               <TableCell align="center" sx={sx.totalHead}>Calories</TableCell>
               <TableCell align="center" sx={sx.totalHead}>Carbs (g)</TableCell>
               <TableCell align="center" sx={sx.totalHead}>Protein (g)</TableCell>
+              {goal > 0 && <TableCell align="center" sx={sx.totalHead}>Left</TableCell>}
               {columns.map((c, i) => (
                 <TableCell
                   key={c.prop}
@@ -84,9 +90,12 @@ export default function NutritionTable({
             {nutritions.map((row) => {
               const editing = editIdx === row.id;
               const src = editing && editDraft ? editDraft : row;
+              const calories = dailyTotal(src, 'calories', slots);
+              const { band, left } = calorieStatus(calories, goal);
+              const tint = CALORIE_TINT[band];            // undefined when band is 'none'
               return (
-                <TableRow key={row.id} hover>
-                  <TableCell sx={sx.dateCell}>
+                <TableRow key={row.id} hover sx={tint ? { backgroundColor: tint } : undefined}>
+                  <TableCell sx={tint ? { ...sx.dateCell, backgroundColor: tint } : sx.dateCell}>
                     {editing ? (
                       <TextField
                         size="small"
@@ -103,7 +112,7 @@ export default function NutritionTable({
                     )}
                   </TableCell>
                   <TableCell align="center" sx={sx.totalCell}>
-                    {dailyTotal(src, 'calories', slots).toFixed(0)}
+                    {calories.toFixed(0)}
                   </TableCell>
                   <TableCell align="center" sx={sx.totalCell}>
                     {dailyTotal(src, 'carbs', slots).toFixed(0)}g
@@ -111,6 +120,11 @@ export default function NutritionTable({
                   <TableCell align="center" sx={sx.totalCell}>
                     {dailyTotal(src, 'protein', slots).toFixed(1)}g
                   </TableCell>
+                  {goal > 0 && (
+                    <TableCell align="center" sx={{ fontWeight: 700, color: CALORIE_TEXT[band] || sx.totalCell.color }}>
+                      {caloriesLeftLabel(left)}
+                    </TableCell>
+                  )}
                   {columns.map((c, i) => (
                     <TableCell
                       key={c.prop}

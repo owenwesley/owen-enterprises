@@ -275,7 +275,8 @@ const TABLES = {
         slidingScale4a   INT        NOT NULL,
         slidingScale4b   INT        NOT NULL,
         slidingScale5    INT        NOT NULL,
-        carbRatio        DECIMAL(10,4) NOT NULL
+        carbRatio        DECIMAL(10,4) NOT NULL,
+        calorieGoal      INT        NOT NULL DEFAULT 0
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
   ],

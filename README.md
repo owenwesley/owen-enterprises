@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.5** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.6** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,15 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.6** — Daily calorie goal: Preferences input, "Left" in the Nutrition Day Total, and traffic-light row colours.
+- **Preferences:** new "Daily Calorie Goal" input under the "Count Carbs" checkbox (shown while that is ticked; blank/0 = no goal). Saved as `preferences.calorieGoal` (`INT NOT NULL DEFAULT 0`), a whole number 0-20000 (clamped on both the client and the server). Like the other nutrition/meds options it is zeroed when Count Carbs is off or at 1-2 readings a day.
+- **Backend:** `calorieGoal` added to the `preferences` definitions in `db/init.js` and `db/db.js` (kept identical), to the INSERT / UPDATE / SELECT in `db/sql/bgtracker/preferences.js`, and to `routes/bgtracker/preferences/_save.js` (a partial save that omits it keeps the stored goal). **Upgrading needs no manual step:** restart the server and `schemaSync` adds the column; existing users get 0 (no goal).
+- **Nutrition table:** with a goal set the Day Total group becomes "Day Total (goal 2,000)" and gains a **Left** column ("450 left" / "120 over"). Each row is tinted by that day's calories (visible meal slots only) against the goal: **green** under 90% of the goal, **yellow** from 90% up to the goal, **red** over it, no colour when nothing is logged. The pinned Date cell takes the same tint.
+- **BG readings table:** the same tint is applied to each reading row whose date has nutrition logged (only when Count Carbs is on, a goal is set and readings are 3+ a day; the nutrition rows are loaded on that page only in that case). A row being edited keeps the edit highlight instead. `stickyFirstColSx` now paints the phone-pinned Date cell with `var(--row-tint, #fff)`, so every other table looks exactly as before.
+- New `features/bgtracker/utils/calorieGoal.js` holds the bands (`NEAR_AT = 0.9`), tints, the "left/over" label and the per-date totals; change them there and both tables follow.
+- Checked: against a real MariaDB 10.11 (the sandbox now has one) the upgrade from a 1.11.5 schema with an existing preferences row (column added, row keeps its data, goal 0, second start-up is a no-op), the save route (store, partial save keeps the goal, clamp/round/junk handling, new-user insert, one row per user) and the live `GET` / `POST /edit` endpoints (18 checks); band logic, per-date totals, `NutritionTable` and BG `Row` rendering (32 checks); `vite build` passes. Not checked in a browser or on a phone; MySQL 8 is still untested.
+- Not done: no calorie colours on the BP-only pages (1-2 readings a day), and nothing is shown for a day with BG readings but no nutrition row. The red/green tints sit in the same family as the A1C page background bands, so they can look alike on a small screen.
 
 **1.11.5** — Nutrition table headers now follow readings per day (`timesPD`), restored from the older NavBar.
 - New `components/Tables/nutritionColumns.js`: `nutritionSlotsFor(timesPD)` and `buildNutritionColumns(timesPD)` return the meal slots and the grouped header. 3 a day: Breakfast, Lunch, Dinner. 4 a day: + Bedtime (`Bed`). 5 a day: Breakfast, Lunch, Dinner, Before Bed (`BB`), Bedtime. Nutrition is only offered at 3+ a day, so any other value falls back to the 3-meal layout. Each meal has the same 18 columns with units (Food Name, Calories, Saturated (g), Trans (g), Polyunsaturated (g), Monosaturated (g), Cholesterol (mg), Sodium (mg), Carbs (g), Fiber (g), Sugars (g), Protein (g), A/C/D (mcg), Calcium/Iron/Potassium (mg)).

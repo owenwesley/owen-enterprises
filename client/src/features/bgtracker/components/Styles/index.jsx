@@ -19,7 +19,7 @@ export const stickyFirstColSx = {
     },
     '& tbody tr:not(.row-editing):not(.totals-row) > td:first-of-type': {
       position: 'sticky', left: 0, zIndex: 1,
-      backgroundColor: '#fff',
+      backgroundColor: 'var(--row-tint, #fff)',   // a row can set --row-tint (calorie goal colours)
       boxShadow: '2px 0 3px -1px rgba(0,0,0,0.25)',
     },
   },

@@ -107,6 +107,21 @@ export default function Preferences(props) {
                 </div>
 
                 {props.chkNutrition ? (
+                  <div style={{ margin: '8px 0 12px' }}>
+                    <TextField
+                      name='calorieGoal'
+                      type='number'
+                      label='Daily Calorie Goal'
+                      value={props.calorieGoal || ''}
+                      onChange={props.handlePreference}
+                      inputProps={{ min: 0, max: 20000, step: 50, inputMode: 'numeric' }}
+                      helperText='Shows what is left in the Nutrition Day Total and colors each day. Leave blank for no goal.'
+                      fullWidth
+                    />
+                  </div>
+                ) : ''}
+
+                {props.chkNutrition ? (
                   <div>
                     <CheckBox
                       name='chkWeight'

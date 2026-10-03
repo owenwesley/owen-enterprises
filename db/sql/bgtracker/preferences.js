@@ -20,8 +20,8 @@ const insertPreference =
     chkMedsL,chkMedsD,chkMedsBed,chkInsulin,typInsulin,
     chkBP,chkSlidingScale,slidingScale1,slidingScale2a,
     slidingScale2b,slidingScale3a,slidingScale3b,slidingScale4a,
-    slidingScale4b, slidingScale5,carbRatio)
-     values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+    slidingScale4b, slidingScale5,carbRatio,calorieGoal)
+     values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 const selectPreferences =
   `SELECT id, user_id, timesPD,
@@ -37,14 +37,14 @@ const selectPreferences =
     IF(chkSlidingScale, 'true','false') AS chkSlidingScale_text, chkSlidingScale, 
     slidingScale1, slidingScale2a, slidingScale2b, slidingScale3a, 
     slidingScale3b, slidingScale4a, slidingScale4b, slidingScale5, 
-    carbRatio FROM preferences`;
+    carbRatio, calorieGoal FROM preferences`;
 
 const updatePreference =
   `UPDATE preferences SET timesPD=?,chkNutrition=?,chkWeight=?,
   height=?,chkMeds=?,chkMedsB=?,chkMedsL=?,chkMedsD=?,chkMedsBed=?,
   chkInsulin=?,typInsulin=?,chkBP=?,chkSlidingScale=?,slidingScale1=?,
   slidingScale2a=?,slidingScale2b=?,slidingScale3a=?,slidingScale3b=?,
-  slidingScale4a=?,slidingScale4b=?,slidingScale5=?,carbRatio=?
+  slidingScale4a=?,slidingScale4b=?,slidingScale5=?,carbRatio=?,calorieGoal=?
    WHERE id=? AND user_id=?;`;
 
 module.exports = {

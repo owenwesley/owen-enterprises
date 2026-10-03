@@ -11,13 +11,16 @@
 //
 // When the row already exists, only the fields the client actually SENT are
 // changed — anything omitted keeps its stored value. (The Save button used to
-// send 7 of the 22 fields; as a plain overwrite that would zero the rest.)
+// send 7 of the 22 original fields; as a plain overwrite that would zero the rest.)
 
 const { insertPreference, updatePreference } = require('../../../db/sql/bgtracker/preferences');
 const { bgtracker } = require('../../../db/db');
 const { toBit, toNum } = require('../../../utils/coerce');
 
-// The 22 editable values, in the exact order both SQL statements expect.
+// Daily calorie goal: a whole number from 0 (no goal) to 20000.
+const toGoal = (v) => Math.max(0, Math.min(20000, Math.round(toNum(v))));
+
+// The 23 editable values, in the exact order both SQL statements expect.
 function values(b) {
   return [
     toNum(b.timesPD),
@@ -28,6 +31,7 @@ function values(b) {
     toNum(b.slidingScale1), toNum(b.slidingScale2a), toNum(b.slidingScale2b),
     toNum(b.slidingScale3a), toNum(b.slidingScale3b), toNum(b.slidingScale4a),
     toNum(b.slidingScale4b), toNum(b.slidingScale5), toNum(b.carbRatio),
+    toGoal(b.calorieGoal),
   ];
 }
 

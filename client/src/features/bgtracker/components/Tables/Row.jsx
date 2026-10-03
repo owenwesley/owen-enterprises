@@ -10,7 +10,7 @@ import Tooltip from "@mui/material/Tooltip";
 import { formatDate, toDateInputValue } from "../../../../utils/dateFormat";
 import { editingRowSx, editingCellSx } from "../Styles/editMode";
 
-const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, editIdx, editDraft) => {
+const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, editIdx, editDraft, rowTint) => {
   // editIdx holds the row's database id, not its array position — this keeps
   // editing correct even though the table renders a filtered subset.
   const rowId = x.id;
@@ -21,8 +21,12 @@ const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, ed
   // committed row.
   const src = editing && editDraft ? editDraft : x;
 
+  // Optional tint (calorie goal): never while editing, where the edit highlight wins.
+  const tint = !editing && rowTint ? rowTint(x) : undefined;
+  const rowSx = editing ? editingRowSx : tint ? { backgroundColor: tint, '--row-tint': tint } : undefined;
+
   return (
-    <TableRow key={`tr-${rowId ?? i}`} sx={editing ? editingRowSx : undefined} className={editing ? 'row-editing' : undefined}>
+    <TableRow key={`tr-${rowId ?? i}`} sx={rowSx} className={editing ? 'row-editing' : undefined}>
       {header.map((y, k) => (
         <TableCell
           align="center"

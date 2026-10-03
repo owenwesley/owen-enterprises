@@ -34,7 +34,7 @@ export const InitialState = {
     chkMeds: false, chkMedsB: false, chkMedsL: false, chkMedsD: false, chkMedsBed: false,
     chkInsulin: false, typInsulin: 0, chkBP: false, chkSlidingScale: false,
     slidingScale1: 0, slidingScale2a: 0, slidingScale2b: 0, slidingScale3a: 0,
-    slidingScale3b: 0, slidingScale4a: 0, slidingScale4b: 0, slidingScale5: 0, carbRatio: 0,
+    slidingScale3b: 0, slidingScale4a: 0, slidingScale4b: 0, slidingScale5: 0, carbRatio: 0, calorieGoal: 0,
   },
   weights: [],
   books: [], movies: [], contacts: [],

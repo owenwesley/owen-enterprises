@@ -44,6 +44,8 @@ function buildPayload(p) {
     slidingScale4b:  scale(p.slidingScale4b),
     slidingScale5:   scale(p.slidingScale5),
     carbRatio:       scale(p.carbRatio),
+    // Daily calorie goal: only meaningful while nutrition is on; whole number 0-20000.
+    calorieGoal:     multi && p.chkNutrition ? Math.max(0, Math.min(20000, Math.round(num(p.calorieGoal)))) : 0,
   };
 }
 
@@ -82,6 +84,7 @@ export function usePreferences() {
         slidingScale3b: num(pref.slidingScale3b), slidingScale4a: num(pref.slidingScale4a),
         slidingScale4b: num(pref.slidingScale4b), slidingScale5:  num(pref.slidingScale5),
         carbRatio: num(pref.carbRatio),
+        calorieGoal: num(pref.calorieGoal),
       },
     });
   }, [dispatch]);
