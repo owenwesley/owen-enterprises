@@ -2,28 +2,29 @@ import { useCallback } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { getFetch, postFetch, postFormData } from '../../../utils/api';
 
-// Suffixes that mark a row as a multi-film release rather than a single movie.
-// Matched case-insensitively against the trailing words of `name`.
-const COLLECTION_SUFFIXES = [
-  'double feature', 'triple feature', 'quadruple feature', 'box set',
-];
-
-/** True if this movie's name ends with one of the collection suffixes. */
-export function isCollection(movie) {
-  const name = (movie.name || '').trim().toLowerCase();
-  return COLLECTION_SUFFIXES.some((suffix) => name.endsWith(suffix));
+/** Number of films on a disc/set (1-12), from the stored numMovie. */
+export function filmCount(movie) {
+  return Math.min(Math.max(parseInt(movie.numMovie, 10) || 1, 1), 12);
 }
 
-/** Returns the filled-in film slots (1..12) for a movie row, in order. */
+/** True when the row holds more than one film (Double, Triple, Quad, Box Set). */
+export function isCollection(movie) {
+  return filmCount(movie) > 1 || !!movie.featureMedia;
+}
+
+/** Feature type label for a film count: 1 = '' (single), 2-4 named, 5+ Box Set. */
+export function featureTypeFor(n) {
+  return ({ 1: '', 2: 'Double Feature', 3: 'Triple Feature', 4: 'Quadruple Feature' })[n] ?? 'Box Set';
+}
+
+/** All film slots 1..numMovie for a movie row, in order (empty titles included). */
 export function collectionSlots(movie) {
   const slots = [];
-  const count = Math.min(Math.max(parseInt(movie.numMovie, 10) || 1, 1), 12);
+  const count = filmCount(movie);
   for (let i = 1; i <= count; i++) {
-    const name = movie[`name${i}`];
-    if (!name) continue;
     slots.push({
       slot:  i,
-      name:  name,
+      name:  movie[`name${i}`] || '',
       rated: movie[`rated${i}`]  || 'NR',
       len:   movie[`length${i}`] || 0,
       year:  movie[`yearR${i}`]  || 0,
@@ -31,6 +32,23 @@ export function collectionSlots(movie) {
     });
   }
   return slots;
+}
+
+/** Returns a copy of the movie with film `slot` removed and later films shifted up. */
+export function removeFilm(movie, slot) {
+  const n = filmCount(movie);
+  const out = { ...movie };
+  for (let i = slot; i <= 12; i++) {
+    const from = i + 1;
+    out[`name${i}`]   = from <= 12 ? movie[`name${from}`]   : '';
+    out[`rated${i}`]  = from <= 12 ? movie[`rated${from}`]  : 'NR';
+    out[`length${i}`] = from <= 12 ? movie[`length${from}`] : 0;
+    out[`yearR${i}`]  = from <= 12 ? movie[`yearR${from}`]  : 0;
+    out[`media${i}`]  = from <= 12 ? movie[`media${from}`]  : 'DVD';
+  }
+  out.numMovie = Math.max(n - 1, 1);
+  out.featureMedia = featureTypeFor(out.numMovie);
+  return out;
 }
 
 /** Empty 12-slot movie record ready for the add form / API call */
@@ -79,6 +97,13 @@ export function useMovies() {
     await getMovies();
   }, [user.id, getMovies]);
 
+  /** Saves a whole movie row straight away (used by the collection grid). Returns an error string or null. */
+  const saveMovie = useCallback(async (movie) => {
+    const res = await postFetch(`/communitylibrary/movies/edit/${user.id}`, movie);
+    await getMovies();
+    return res?.error || null;
+  }, [user.id, getMovies]);
+
   const handleMovieChange = useCallback((field, value, i) => {
     dispatch({
       type: 'SET_MOVIES',
@@ -104,7 +129,7 @@ export function useMovies() {
 
   return {
     movies, editIdx,
-    getMovies, addMovie, uploadMoviePoster,
+    getMovies, addMovie, saveMovie, uploadMoviePoster,
     handleMovieChange, startEditingMovie, stopEditingMovie, deleteMovie,
   };
 }

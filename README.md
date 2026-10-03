@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.7** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.8** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,13 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.8** — Movies: borrower name, multi-title discs, films grid.
+- **Bug:** a movie set to Out showed "Out: In Library" because the borrower was never cleared and the add/edit routes defaulted it to "In Library". Choosing Out now requires picking a contact (client and server both check); In always stores "In Library"; old rows showing "In Library" display plain "Out".
+- **Bug:** multi-title discs were sorted into the Multi-Feature grid by whether the *name* ended in "Double Feature" etc. They are now sorted by `numMovie` / `featureMedia`.
+- **Bug:** the edit dialog saved the list copy in app state, and two changes in one event (feature type + count, status + borrower) overwrote each other. The dialog now saves its own row.
+- **New:** clicking a Double/Triple/Quad/Box Set card opens a grid of its films (up to 12); each film can be edited, or removed (later films shift up; the set re-labels itself and becomes a single when one film is left). Counts show total films (a Double adds 2).
+- **Server:** `routes/communitylibrary/movies/_fields.js` gains `normalizeCollection` (numMovie clamped 1-12, feature type derived from it) and `checkWho`. No schema change.
 
 **1.11.7** — Fixed movie add/edit: `db/sql/communitylibrary/movies.js` rebuilt to match the 12-slot `movies` table.
 - **Bug:** the INSERT and UPDATE in `db/sql/communitylibrary/movies.js` were from the old one-title design (`rated`, `len`, `year_released`, `media`, 10 columns), but the `movies` table in `db/init.js` / `db/db.js` and the params sent by `routes/communitylibrary/movies/add.js` and `edit.js` use the 12-slot layout (`numMovie`, `featureMedia`, `name1`..`name12`, `rated`/`length`/`yearR`/`media` 1..12; 68 values on add, 69 on edit). Every movie add and edit therefore failed with an unknown-column error. `db/init.js` and `db/db.js` were already correct and were NOT changed, so no schema change and no migration.

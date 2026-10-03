@@ -23,7 +23,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import { useAppContext } from '../../context/AppContext';
-import { useMovies, isCollection, collectionSlots, emptyMovie } from './hooks/useMovies';
+import { useMovies, isCollection, filmCount, collectionSlots, removeFilm, emptyMovie } from './hooks/useMovies';
 import { useContacts } from './hooks/useContacts';
 
 const PLACEHOLDER  = 'https://via.placeholder.com/140x200?text=No+Poster';
@@ -54,6 +54,10 @@ const sxStyles = {
 // ── io/lost conversions: DB stores 1/0, UI shows In/Out and Yes/No ────────────
 const ioLabel   = (v) => (v === 1 || v === '1' || v === 'In'  ? 'In'  : 'Out');
 const lostLabel = (v) => (v === 1 || v === '1' || v === 'Yes' ? 'Yes' : 'No');
+
+// "Out: Wes Owen". Old rows saved before this fix may hold "In Library" as the
+// borrower; show plain "Out" for those rather than "Out: In Library".
+const outText = (m) => (m.who && m.who !== 'In Library' ? `Out: ${m.who}` : 'Out');
 
 function mediaColor(media) {
   const m = { VHS: '#555', DVD: '#1565c0', 'HD-DVD': '#2e7d32', 'Blu-Ray': '#6a1b9a' };
@@ -88,6 +92,7 @@ function requiredSlotCount(featureMedia, numMovie) {
 // ── Edit/Add dialog — tabs for single-movie vs collection mode ────────────────
 function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, contactNames }) {
   const [slotTab, setSlotTab] = useState(0);
+  const [whoErr, setWhoErr] = useState(false);
   if (!movie) return null;
 
   const slotCount = requiredSlotCount(movie.featureMedia, movie.numMovie);
@@ -109,6 +114,20 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, con
     onChange('featureMedia', value);
     const nextCount = requiredSlotCount(value, movie.numMovie);
     onChange('numMovie', nextCount);
+  };
+
+  // Status change: Out starts with nobody chosen, In always means "In Library".
+  const handleStatusChange = (value) => {
+    onChange('io', value);
+    onChange('who', value === 'Out' ? '' : 'In Library');
+    setWhoErr(false);
+  };
+
+  const whoValue = contactNames.includes(movie.who) ? movie.who : '';
+  const trySave = () => {
+    if (io === 'Out' && !whoValue) { setWhoErr(true); return; }
+    setWhoErr(false);
+    onSave();
   };
 
   const handleBoxSetCountChange = (value) => {
@@ -210,7 +229,7 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, con
 
         <TextField
           label="Status" select value={io}
-          onChange={(e) => onChange('io', e.target.value)}
+          onChange={(e) => handleStatusChange(e.target.value)}
           fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
         >
           {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
@@ -218,8 +237,9 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, con
 
         {io === 'Out' && (
           <TextField
-            label="Checked out to" select value={movie.who || ''}
-            onChange={(e) => onChange('who', e.target.value)}
+            label="Checked out to" select value={whoValue}
+            onChange={(e) => { onChange('who', e.target.value); setWhoErr(false); }}
+            error={whoErr} helperText={whoErr ? 'Choose who has this movie.' : ''}
             fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
           >
             <option value="" disabled></option>
@@ -237,7 +257,7 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, con
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={onSave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
+        <Button onClick={trySave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
       </DialogActions>
     </Dialog>
   );
@@ -267,7 +287,7 @@ function SingleMovieCard({ movie, onEdit, onDelete }) {
           {movie.rated1} · {movie.yearR1} · {movie.length1}min
         </Typography>
         {io === 'Out' && (
-          <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>{movie.who ? `Out: ${movie.who}` : 'Out'}</Typography>
+          <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>{outText(movie)}</Typography>
         )}
       </CardContent>
       <CardActions style={{ padding: '0 4px 4px' }}>
@@ -278,19 +298,27 @@ function SingleMovieCard({ movie, onEdit, onDelete }) {
   );
 }
 
-// ── Collection card (Double/Triple/Quad Feature, Box Set) — expandable ────────
-function CollectionCard({ movie, onEdit, onDelete }) {
-  const [expanded, setExpanded] = useState(false);
-  const slots = collectionSlots(movie);
+// ── Collection card (Double/Triple/Quad Feature, Box Set) — click to open films ─
+function CollectionCard({ movie, onOpen, onEdit, onDelete }) {
   const io = ioLabel(movie.io), lost = lostLabel(movie.lost);
 
   return (
     <Card sx={sxStyles.card} elevation={3} style={{ width: 220, maxWidth: '100%' }}>
-      <CardMedia
-        component="img" sx={sxStyles.media}
-        image={movie.img_url || PLACEHOLDER} alt={movie.name}
-        onError={(e) => { e.target.src = PLACEHOLDER; }}
-      />
+      <div onClick={onOpen} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+        <CardMedia
+          component="img" sx={sxStyles.media}
+          image={movie.img_url || PLACEHOLDER} alt={movie.name}
+          onError={(e) => { e.target.src = PLACEHOLDER; }}
+        />
+        <CardContent style={{ padding: '8px 10px', flexGrow: 1 }}>
+          <Typography sx={sxStyles.cardTitle}>{movie.name}</Typography>
+          <Typography sx={sxStyles.cardSub}>{filmCount(movie)} films</Typography>
+          {io === 'Out' && (
+            <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>{outText(movie)}</Typography>
+          )}
+          <Typography style={{ fontSize: '0.7rem', color: '#4a148c' }}>Tap to see films</Typography>
+        </CardContent>
+      </div>
       <span style={sxStyles.badgeMedia}>
         <Chip size="small" label={movie.featureMedia || 'Collection'}
           style={{ backgroundColor: '#6a1b9a', color: '#fff', fontSize: 10 }} />
@@ -299,32 +327,6 @@ function CollectionCard({ movie, onEdit, onDelete }) {
         <Chip size="small" label={lost === 'Yes' ? 'Lost' : io}
           color={io === 'In' && lost !== 'Yes' ? 'primary' : 'secondary'} />
       </span>
-      <CardContent style={{ padding: '8px 10px', flexGrow: 1 }}>
-        <Typography sx={sxStyles.cardTitle}>{movie.name}</Typography>
-        <Typography sx={sxStyles.cardSub}>{slots.length} films</Typography>
-        {io === 'Out' && (
-          <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>{movie.who ? `Out: ${movie.who}` : 'Out'}</Typography>
-        )}
-      </CardContent>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px' }}>
-        <Typography style={{ fontSize: '0.7rem', color: '#4a148c', cursor: 'pointer' }}
-          onClick={() => setExpanded((e) => !e)}>
-          {expanded ? 'Hide films' : 'Show films'}
-        </Typography>
-        <IconButton size="small" sx={sxStyles.expandBtn} onClick={() => setExpanded((e) => !e)}
-          style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }}>
-          <ExpandMoreIcon fontSize="small" />
-        </IconButton>
-      </div>
-      <Collapse in={expanded}>
-        <div style={{ padding: '4px 10px' }}>
-          {slots.map((s) => (
-            <div key={s.slot} style={sxStyles.slotRow}>
-              <strong>{s.name}</strong> — {s.rated}, {s.year}, {s.media}
-            </div>
-          ))}
-        </div>
-      </Collapse>
       <CardActions style={{ padding: '0 4px 4px' }}>
         <IconButton size="small" onClick={onEdit}><EditIcon fontSize="small" /></IconButton>
         <IconButton size="small" onClick={onDelete}><DeleteIcon fontSize="small" /></IconButton>
@@ -333,13 +335,75 @@ function CollectionCard({ movie, onEdit, onDelete }) {
   );
 }
 
+// ── Films grid: every film on one disc/set, each editable or removable ────────
+function FilmsDialog({ movie, onClose, onEditFilm, onDeleteFilm }) {
+  if (!movie) return null;
+  const slots = collectionSlots(movie);
+  return (
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>{movie.name} — {slots.length} films</DialogTitle>
+      <DialogContent>
+        <div style={sxStyles.grid}>
+          {slots.map((s) => (
+            <Card key={s.slot} elevation={2} style={{ width: 170, maxWidth: '100%' }}>
+              <CardContent style={{ padding: '8px 10px' }}>
+                <Typography sx={sxStyles.cardSub}>Film {s.slot}</Typography>
+                <Typography sx={sxStyles.cardTitle}>{s.name || '(untitled)'}</Typography>
+                <Typography sx={sxStyles.cardSub}>{s.rated} · {s.year || '—'} · {s.len || 0} min</Typography>
+                <Chip size="small" label={s.media}
+                  style={{ backgroundColor: mediaColor(s.media), color: '#fff', fontSize: 10, marginTop: 4 }} />
+              </CardContent>
+              <CardActions style={{ padding: '0 4px 4px' }}>
+                <IconButton size="small" onClick={() => onEditFilm(s.slot)}><EditIcon fontSize="small" /></IconButton>
+                <IconButton size="small" onClick={() => onDeleteFilm(s.slot)}><DeleteIcon fontSize="small" /></IconButton>
+              </CardActions>
+            </Card>
+          ))}
+        </div>
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
+    </Dialog>
+  );
+}
+
+// ── One film's details (title, rating, length, year, media) ──────────────────
+function FilmEditDialog({ film, onClose, onSave }) {
+  const [f, setF] = useState(film);
+  if (!film) return null;
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Edit Film {f.slot}</DialogTitle>
+      <DialogContent>
+        <TextField label="Title" value={f.name} onChange={(e) => set('name', e.target.value)}
+          fullWidth size="small" sx={sxStyles.field} />
+        <TextField label="Rating" select value={f.rated} onChange={(e) => set('rated', e.target.value)}
+          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
+          {RATINGS.map((v) => <option key={v} value={v}>{v}</option>)}
+        </TextField>
+        <TextField label="Length (min)" type="number" value={f.len} onChange={(e) => set('len', e.target.value)}
+          fullWidth size="small" sx={sxStyles.field} />
+        <TextField label="Year" type="number" value={f.year} onChange={(e) => set('year', e.target.value)}
+          fullWidth size="small" sx={sxStyles.field} />
+        <TextField label="Media" select value={f.media} onChange={(e) => set('media', e.target.value)}
+          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
+          {MEDIA_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+        </TextField>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={() => onSave(f)} sx={sxStyles.saveBtn} variant="contained">Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Main page — two grids ──────────────────────────────────────────────────────
 export default function MoviesPage() {
   const { state } = useAppContext();
   const { user } = state;
   const {
-    movies, getMovies, addMovie, uploadMoviePoster,
-    handleMovieChange, startEditingMovie, stopEditingMovie, deleteMovie,
+    movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie,
   } = useMovies();
   const { contacts, getContacts } = useContacts();
 
@@ -348,6 +412,8 @@ export default function MoviesPage() {
   const [newMovie,  setNewMovie]  = useState(null);
   const [editFile,  setEditFile]  = useState(null); // pending File object for the edit dialog
   const [newFile,   setNewFile]   = useState(null); // pending File object for the add dialog
+  const [filmsId,   setFilmsId]   = useState(null); // id of the collection whose films grid is open
+  const [filmEdit,  setFilmEdit]  = useState(null); // film slot being edited in the films grid
 
   useEffect(() => { if (user.id) { getMovies(); getContacts(); } }, [user.id, getMovies, getContacts]);
 
@@ -359,23 +425,21 @@ export default function MoviesPage() {
   const singles     = filtered.filter((m) => !isCollection(m));
   const collections = filtered.filter((m) => isCollection(m));
 
-  const openEdit = (i, movie) => {
-    startEditingMovie(i);
+  const openEdit = (movie) => {
     setEditFile(null);
-    setDialog({ idx: i, movie: { ...movie, io: ioLabel(movie.io), lost: lostLabel(movie.lost) } });
+    setDialog({ movie: { ...movie, io: ioLabel(movie.io), lost: lostLabel(movie.lost) } });
   };
 
+  // The dialog holds the whole edited row, so save that row directly.
   const handleDialogChange = (field, value) => {
     setDialog((d) => ({ ...d, movie: { ...d.movie, [field]: value } }));
-    handleMovieChange(field, value, dialog.idx);
   };
 
   const handleSave = async () => {
-    // media_type comes from the primary slot's media field (e.g. 'DVD', 'Blu-Ray')
-    const mediaType = dialog.movie.media1 || 'dvd';
-    const imgUrl = await uploadMoviePoster(dialog.movie.name, mediaType, editFile, null);
-    if (imgUrl) handleMovieChange('img_url', imgUrl, dialog.idx);
-    await stopEditingMovie();
+    const m = dialog.movie;
+    const imgUrl = await uploadMoviePoster(m.name, m.media1 || 'dvd', editFile, null);
+    const err = await saveMovie({ ...m, img_url: imgUrl || m.img_url });
+    if (err) return; // server message is already shown; keep the dialog open
     setDialog(null);
     setEditFile(null);
   };
@@ -389,8 +453,31 @@ export default function MoviesPage() {
     setNewFile(null);
   };
 
-  // Find the real index in `movies` (not the filtered array) for edit/delete
+  // Find the real index in `movies` (not the filtered array) for delete
   const realIndex = (movie) => movies.findIndex((m) => m === movie);
+
+  const filmsMovie = movies.find((m) => m.id === filmsId) || null;
+  const totalFilms = movies.reduce((n, m) => n + filmCount(m), 0);
+  const collectionFilms = collections.reduce((n, m) => n + filmCount(m), 0);
+
+  const saveFilm = async (f) => {
+    const m = { ...filmsMovie };
+    m[`name${f.slot}`] = f.name;
+    m[`rated${f.slot}`] = f.rated;
+    m[`length${f.slot}`] = Number(f.len) || 0;
+    m[`yearR${f.slot}`] = Number(f.year) || 0;
+    m[`media${f.slot}`] = f.media;
+    const err = await saveMovie(m);
+    if (!err) setFilmEdit(null);
+  };
+
+  const deleteFilm = async (slot) => {
+    const name = filmsMovie[`name${slot}`] || `Film ${slot}`;
+    if (!window.confirm(`Remove "${name}" from this set?`)) return;
+    const next = removeFilm(filmsMovie, slot);
+    const err = await saveMovie(next);
+    if (!err && filmCount(next) === 1) setFilmsId(null); // no longer a collection
+  };
 
   return (
     <div style={sxStyles.root}>
@@ -409,6 +496,7 @@ export default function MoviesPage() {
         >
           Add Movie
         </Button>
+        <Typography sx={sxStyles.cardSub}>Total films: {totalFilms}</Typography>
       </div>
 
       {/* Grid 1 — single releases */}
@@ -421,7 +509,7 @@ export default function MoviesPage() {
               <SingleMovieCard
                 key={movie.id || i}
                 movie={movie}
-                onEdit={() => openEdit(i, movie)}
+                onEdit={() => openEdit(movie)}
                 onDelete={() => deleteMovie(i)}
               />
             );
@@ -433,7 +521,7 @@ export default function MoviesPage() {
       {collections.length > 0 && (
         <div style={sxStyles.section}>
           <Typography sx={sxStyles.sectionTitle}>
-            Multi-Feature &amp; Box Sets ({collections.length})
+            Multi-Feature &amp; Box Sets ({collections.length} sets · {collectionFilms} films)
           </Typography>
           <div style={sxStyles.grid}>
             {collections.map((movie) => {
@@ -442,7 +530,8 @@ export default function MoviesPage() {
                 <CollectionCard
                   key={movie.id || i}
                   movie={movie}
-                  onEdit={() => openEdit(i, movie)}
+                  onOpen={() => setFilmsId(movie.id)}
+                  onEdit={() => openEdit(movie)}
                   onDelete={() => deleteMovie(i)}
                 />
               );
@@ -451,6 +540,12 @@ export default function MoviesPage() {
         </div>
       )}
 
+      <FilmsDialog
+        movie={filmsMovie} onClose={() => setFilmsId(null)}
+        onEditFilm={(slot) => setFilmEdit(collectionSlots(filmsMovie).find((x) => x.slot === slot))}
+        onDeleteFilm={deleteFilm}
+      />
+      <FilmEditDialog key={filmEdit?.slot ?? 'none'} film={filmEdit} onClose={() => setFilmEdit(null)} onSave={saveFilm} />
       <MovieDialog open={!!dialog}   movie={dialog?.movie} onClose={() => setDialog(null)}   onChange={handleDialogChange} onSave={handleSave}   onFileSelect={setEditFile} contactNames={contactNames} />
       <MovieDialog open={!!newMovie} movie={newMovie}       onClose={() => setNewMovie(null)} onChange={handleNewChange}    onSave={handleAddSave} onFileSelect={setNewFile}  contactNames={contactNames} />
     </div>

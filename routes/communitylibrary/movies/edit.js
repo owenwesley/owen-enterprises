@@ -4,7 +4,7 @@ const { updateReply } = require('../../../utils/dbRespond');
 const { mergeExisting } = require('../../../utils/mergeExisting');
 const { updateMovie } = require('../../../db/sql/communitylibrary/movies');
 const { communitylibrary } = require('../../../db/db');
-const { slotFields } = require('./_fields');
+const { slotFields, normalizeCollection, checkWho } = require('./_fields');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -14,13 +14,16 @@ router.post('/:user_id', async (req, res) => {
     if (!b) return reply(null, { affectedRows: 0 });
     const ioVal   = ioToDb(b.io);
     const lostVal = lostToDb(b.lost);
+    const whoErr = checkWho(ioVal, b.who);
+    if (whoErr) return res.status(400).json({ error: whoErr });
+    const col = normalizeCollection(b);
     const params = [
       b.name || '',
-      b.featureMedia || '',
-      b.numMovie || 1,
+      col.featureMedia,
+      col.numMovie,
       ...slotFields(b),
       ioVal,
-      b.who || 'In Library',
+      ioVal === 1 ? 'In Library' : b.who.trim(),
       lostVal,
       b.img_url || '',
       b.id,

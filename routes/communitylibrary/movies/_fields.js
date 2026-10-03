@@ -14,4 +14,26 @@ function slotFields(b) {
   return out;
 }
 
-module.exports = { slotFields };
+// Feature type <-> film count. The server decides these so a row can never
+// say "Single" with 7 films, or "Double Feature" with 1.
+const TYPE_COUNTS = { 'Double Feature': 2, 'Triple Feature': 3, 'Quadruple Feature': 4 };
+const TYPE_NAMES  = { 2: 'Double Feature', 3: 'Triple Feature', 4: 'Quadruple Feature' };
+
+/** Returns { numMovie (1-12), featureMedia ('' | Double..Box Set) } for a body. */
+function normalizeCollection(b) {
+  let n = Math.trunc(Number(b.numMovie)) || 1;
+  if (n <= 1 && TYPE_COUNTS[b.featureMedia]) n = TYPE_COUNTS[b.featureMedia];
+  if (n <= 1 && b.featureMedia === 'Box Set') n = 5;
+  n = Math.min(12, Math.max(1, n));
+  const featureMedia = n === 1 ? '' : (TYPE_NAMES[n] || 'Box Set');
+  return { numMovie: n, featureMedia };
+}
+
+/** Out needs a real borrower; In always reads "In Library". Returns error text or null. */
+function checkWho(ioVal, who) {
+  const w = (who || '').trim();
+  if (ioVal === 0 && (w === '' || w === 'In Library')) return 'Choose who has this movie.';
+  return null;
+}
+
+module.exports = { slotFields, normalizeCollection, checkWho };
