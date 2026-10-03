@@ -496,12 +496,11 @@ export default function MoviesPage() {
         >
           Add Movie
         </Button>
-        <Typography sx={sxStyles.cardSub}>Total films: {totalFilms}</Typography>
       </div>
 
       {/* Grid 1 — single releases */}
       <div style={sxStyles.section}>
-        <Typography sx={sxStyles.sectionTitle}>Movies ({singles.length})</Typography>
+        <Typography sx={sxStyles.sectionTitle}>Movies ({totalFilms})</Typography>
         <div style={sxStyles.grid}>
           {singles.map((movie) => {
             const i = realIndex(movie);

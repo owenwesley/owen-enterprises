@@ -317,7 +317,7 @@ Please read these before putting real users' data on it.
 - **Bug:** a movie set to Out showed "Out: In Library" because the borrower was never cleared and the add/edit routes defaulted it to "In Library". Choosing Out now requires picking a contact (client and server both check); In always stores "In Library"; old rows showing "In Library" display plain "Out".
 - **Bug:** multi-title discs were sorted into the Multi-Feature grid by whether the *name* ended in "Double Feature" etc. They are now sorted by `numMovie` / `featureMedia`.
 - **Bug:** the edit dialog saved the list copy in app state, and two changes in one event (feature type + count, status + borrower) overwrote each other. The dialog now saves its own row.
-- **New:** clicking a Double/Triple/Quad/Box Set card opens a grid of its films (up to 12); each film can be edited, or removed (later films shift up; the set re-labels itself and becomes a single when one film is left). Counts show total films (a Double adds 2).
+- **New:** clicking a Double/Triple/Quad/Box Set card opens a grid of its films (up to 12); each film can be edited, or removed (later films shift up; the set re-labels itself and becomes a single when one film is left). The "Movies (n)" heading shows total films (a Double adds 2, a Box Set of 7 adds 7); the multi-feature section shows sets and films.
 - **Server:** `routes/communitylibrary/movies/_fields.js` gains `normalizeCollection` (numMovie clamped 1-12, feature type derived from it) and `checkWho`. No schema change.
 
 **1.11.7** — Fixed movie add/edit: `db/sql/communitylibrary/movies.js` rebuilt to match the 12-slot `movies` table.
