@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.9** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.10** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,14 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.10** — Small fixes: medication deduction, blank weight, Contacts, delete confirms, film search.
+- **Bug fixed, `useReadings.js` `stopEditingReading`:** the Meds-tick deduction was saved from the ORIGINAL medication list, so for a medication that was also reduced by the sliding-scale dose in the same save, the second write started from the old quantity and overwrote the first. One working medication list now goes through both steps, and the final quantities are put in state once. (Found by reading; not reproduced against a database.)
+- **Weight Add:** a blank form (no kg and no lbs) is refused with a toast instead of saving 0 kg.
+- **Contacts:** same fix books/movies got. The dialog holds its own copy and saves it through new `saveContact`; edit/delete use the real index (a search no longer edits or deletes the wrong contact); deleting asks to confirm. `handleContactChange`, `startEditingContact`, `stopEditingContact` and `editIdx` are gone from `useContacts`.
+- **Delete confirms:** deleting a whole book, movie or set now asks first.
+- **Movies search:** also matches film titles inside a set.
+- No schema change, no server change, no files to delete.
 
 **1.11.9** — Movies: one A-Z grid, per-film Out/Who and picture. Books: borrower fix.
 - **Movies, schema:** `movies` gains 36 columns, `io1..io12`, `who1..who12`, `img1..img12`, so every film in a Double/Triple/Quad/Box Set has its own In/Out, borrower and picture. Defaults are In / "In Library" / no picture. `db/schemaSync.js` adds them to an existing database on start-up; `db/init.js` and `db/db.js` stay identical. The disc-level `io`, `who` and `img_url` stay: for a single they ARE the film's status; for a set `io`/`who` are a summary the server derives (In when no film is out, else Out with the borrower, or "Several" when the films are with different people) and `img_url` is the set cover. `lost` stays at disc level.

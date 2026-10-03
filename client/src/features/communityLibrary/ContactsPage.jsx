@@ -66,8 +66,7 @@ export default function ContactsPage() {
   const { state } = useAppContext();
   const { user } = state;
   const {
-    contacts, getContacts, addContact,
-    handleContactChange, startEditingContact, stopEditingContact, deleteContact,
+    contacts, getContacts, addContact, saveContact, deleteContact,
   } = useContacts();
 
   const [search,     setSearch]     = useState('');
@@ -80,17 +79,20 @@ export default function ContactsPage() {
     `${c.firstName} ${c.lastName} ${c.email} ${c.phoneNum}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openEdit = (i) => {
-    startEditingContact(i);
-    setDialog({ idx: i, contact: { ...contacts[i] } });
-  };
+  // Index into `contacts` (not the filtered list), so search never edits or deletes the wrong contact.
+  const realIndex = (c) => contacts.findIndex((x) => x === c);
+
+  const openEdit = (c) => setDialog({ contact: { ...c } });
 
   const handleDialogChange = (field, value) => {
     setDialog((d) => ({ ...d, contact: { ...d.contact, [field]: value } }));
-    handleContactChange(field, value, dialog.idx);
   };
 
-  const handleSave = async () => { await stopEditingContact(); setDialog(null); };
+  const handleSave = async () => {
+    const err = await saveContact(dialog.contact);
+    if (err) return; // server message is already shown; keep the dialog open
+    setDialog(null);
+  };
 
   const handleNewChange = (field, value) => setNewContact((c) => ({ ...c, [field]: value }));
   const handleAddSave   = async () => { await addContact(newContact); setNewContact(null); };
@@ -130,16 +132,19 @@ export default function ContactsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map((c, i) => (
-                <TableRow key={c.id || i} hover>
+              {filtered.map((c) => (
+                <TableRow key={c.id} hover>
                   <TableCell>{c.firstName}</TableCell>
                   <TableCell>{c.lastName}</TableCell>
                   <TableCell>{c.phoneNum}</TableCell>
                   <TableCell>{c.email}</TableCell>
                   <TableCell>{c.address}</TableCell>
                   <TableCell align="center">
-                    <IconButton size="small" onClick={() => openEdit(i)}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" onClick={() => deleteContact(i)}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => openEdit(c)}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => {
+                      const name = `${c.firstName} ${c.lastName}`.trim() || 'this contact';
+                      if (window.confirm(`Delete ${name}?`)) deleteContact(realIndex(c));
+                    }}><DeleteIcon fontSize="small" /></IconButton>
                   </TableCell>
                 </TableRow>
               ))}

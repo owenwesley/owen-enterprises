@@ -24,6 +24,11 @@ export function useWeights() {
   const addWeight = useCallback(async () => {
     const w = state.weight || {};
     const { date = todayFormatted(), kg = 0, lbs = 0, bmi = 0 } = w;
+    // A blank form used to save a 0 kg row. Refuse it, like the edit path.
+    if (!(Number(kg) > 0) && !(Number(lbs) > 0)) {
+      notifyError('Enter a weight greater than 0 before adding.');
+      return;
+    }
     const newRow = { user_id: user.id, date, kg, lbs, bmi };
 
     let updated = [...weights];

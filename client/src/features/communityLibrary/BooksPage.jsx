@@ -250,7 +250,7 @@ export default function BooksPage() {
             </CardContent>
             <CardActions style={{ padding: '0 4px 4px' }}>
               <IconButton size="small" onClick={() => openEdit(book)}><EditIcon fontSize="small" /></IconButton>
-              <IconButton size="small" onClick={() => deleteBook(realIndex(book))}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={() => { if (window.confirm(`Delete \"${book.title}\"?`)) deleteBook(realIndex(book)); }}><DeleteIcon fontSize="small" /></IconButton>
             </CardActions>
           </Card>
         ))}

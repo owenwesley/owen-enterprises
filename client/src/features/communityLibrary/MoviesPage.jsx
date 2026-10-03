@@ -537,9 +537,18 @@ export default function MoviesPage() {
 
   // The server already returns movies ORDER BY name, id (exactly as typed:
   // "The Matrix" sorts under T). Filtering keeps that order.
+  // Search matches the disc name OR any film title inside a set.
+  const q = search.toLowerCase();
   const filtered = movies.filter((m) =>
-    (m.name || '').toLowerCase().includes(search.toLowerCase())
+    (m.name || '').toLowerCase().includes(q) ||
+    (isCollection(m) && collectionSlots(m).some((f) => f.name.toLowerCase().includes(q)))
   );
+
+  // Deleting a whole movie or set cannot be undone: ask first.
+  const confirmDelete = (movie, i) => {
+    const what = isCollection(movie) ? `the set \"${movie.name}\" and all its films` : `\"${movie.name}\"`;
+    if (window.confirm(`Delete ${what}?`)) deleteMovie(i);
+  };
 
   const openEdit = (movie) => {
     const row = { ...movie, io: ioLabel(movie.io), lost: lostLabel(movie.lost) };
@@ -656,14 +665,14 @@ export default function MoviesPage() {
                 movie={movie}
                 onOpen={() => setFilmsId(movie.id)}
                 onEdit={() => openEdit(movie)}
-                onDelete={() => deleteMovie(i)}
+                onDelete={() => confirmDelete(movie, i)}
               />
             ) : (
               <SingleMovieCard
                 key={movie.id || i}
                 movie={movie}
                 onEdit={() => openEdit(movie)}
-                onDelete={() => deleteMovie(i)}
+                onDelete={() => confirmDelete(movie, i)}
               />
             );
           })}

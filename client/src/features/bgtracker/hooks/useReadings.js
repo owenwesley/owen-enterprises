@@ -147,6 +147,12 @@ export function useReadings() {
     // as a number instead.
     const useSlidingScale = Number(pref.carbRatio) > 0;
 
+    // ONE working copy of the medication list for this whole save. The
+    // sliding-scale deduction and the Meds-tick deduction both read and write
+    // it, so the second can't start from the stale pre-edit quantities and
+    // overwrite the first for the same medication.
+    let workingMeds = [...medications];
+
     if (useSlidingScale) {
       row.insulinFB  = calcSlidingScale(parseInt(row.sugarB  || 0), parseInt(row.carbsB  || 0), pref);
       row.insulinL   = calcSlidingScale(parseInt(row.sugarL  || 0), parseInt(row.carbsL  || 0), pref);
@@ -154,7 +160,7 @@ export function useReadings() {
       row.insulinBB  = calcSlidingScale(parseInt(row.sugarBB || 0), parseInt(row.carbsBB || 0), pref);
       row.insulinFBed= calcSlidingScale(parseInt(row.sugarBed|| 0), parseInt(row.carbsBed|| 0), pref);
 
-      const meds = [...medications];
+      const meds = workingMeds;
       // Fix: `prev` used to be read from `row[field]` — the same object
       // `current` reads from, after that field had just been overwritten
       // by calcSlidingScale() a few lines up for 5 of these 9 fields, and
@@ -187,7 +193,6 @@ export function useReadings() {
           }
         }
       }
-      dispatch({ type: 'SET_MEDICATIONS', payload: meds });
     }
 
     const updatedReadings = readings.map((r, i) => i === trueIdx ? row : r);
@@ -207,9 +212,16 @@ export function useReadings() {
     };
 
     if (Object.values(newlyChecked).some(Boolean)) {
-      await deductMeds(updatedReadings, trueIdx, medications, user, newlyChecked);
+      // Pass the working list (already reduced by any sliding-scale doses)
+      // and keep what it returns.
+      workingMeds = await deductMeds(updatedReadings, trueIdx, workingMeds, user, newlyChecked);
     } else {
       await saveReading(user, updatedReadings, trueIdx);
+    }
+
+    // Publish the final medication quantities once, after both deductions.
+    if (workingMeds !== medications) {
+      dispatch({ type: 'SET_MEDICATIONS', payload: workingMeds });
     }
 
     await getReadings(user.id);
