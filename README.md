@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.8** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.9** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -312,6 +312,16 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.9** — Movies: one A-Z grid, per-film Out/Who and picture. Books: borrower fix.
+- **Movies, schema:** `movies` gains 36 columns, `io1..io12`, `who1..who12`, `img1..img12`, so every film in a Double/Triple/Quad/Box Set has its own In/Out, borrower and picture. Defaults are In / "In Library" / no picture. `db/schemaSync.js` adds them to an existing database on start-up; `db/init.js` and `db/db.js` stay identical. The disc-level `io`, `who` and `img_url` stay: for a single they ARE the film's status; for a set `io`/`who` are a summary the server derives (In when no film is out, else Out with the borrower, or "Several" when the films are with different people) and `img_url` is the set cover. `lost` stays at disc level.
+- **Movies, migration:** new `db/migrateMovieSlots.js` (run from `server.js` after `migrateInsulinColumns`): a row that is Out at disc level but whose films all read In gets the disc's borrower copied onto films 1..numMovie. Safe to run on every start.
+- **Movies, server:** `routes/communitylibrary/movies/_fields.js` now exports `buildMovie` (replaces `slotFields`/`checkWho` there): validates every Out film has a real borrower (400 "Choose who has film 2."), derives numMovie/featureMedia and the disc summary, resets films above numMovie to In / no picture. A body with no per-film io/who (older client, sparse body) applies its disc-level io/who to every film. `insertMovie`/`updateMovie` now carry 104 / 105 params.
+- **Movies, page:** singles and sets are one A-Z grid in server order (`ORDER BY name, id`, names sorted exactly as typed, "The" is not skipped). Set cards read "Out: Wes Owen", "All 3 out" or "2 of 3 out". The films grid shows one card per film with its own picture, status chip and borrower. The edit dialog has per-film Status, Borrower and picture, plus "All films In" and "Lend whole set to...". "Movies (n)" still counts total films.
+- **Books, bug:** `books/add.js` and `edit.js` stored `who || 'In Library'`; Out with no borrower was accepted. They now use the shared `utils/borrower.js` (`checkWho`, `whoToDb`): HTTP 400 "Choose who has this book.", In stores "In Library". The Books dialog clears the borrower when Status changes, requires a contact when Out, and cards show "Out: Wes Owen".
+- **Books, bug:** `updateBook` in `db/sql/communitylibrary/books.js` had a leading `user_id=?` and `WHERE id=?` while the route sent 11 values in a different order; it is now `... WHERE id=? AND user_id=?` matching the route.
+- **Books page:** the edit and delete buttons used the index in the SEARCH-FILTERED list against the full list (wrong book when a search was active); now mapped back to the real index. The edit dialog saves its own row (`saveBook`) instead of editing a stale array in app state, so cover and status changes in one save no longer overwrite each other.
+- **Covers:** saving an edit with no new file uploaded the placeholder over the stored picture (same file name). Books and movies now upload only when a file was chosen or no picture exists.
 
 **1.11.8** — Movies: borrower name, multi-title discs, films grid.
 - **Bug:** a movie set to Out showed "Out: In Library" because the borrower was never cleared and the add/edit routes defaulted it to "In Library". Choosing Out now requires picking a contact (client and server both check); In always stores "In Library"; old rows showing "In Library" display plain "Out".

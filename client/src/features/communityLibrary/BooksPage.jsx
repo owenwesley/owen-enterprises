@@ -48,10 +48,28 @@ function statusColor(io, lost) {
   return ioLabel(io) === 'In' ? 'primary' : 'secondary';
 }
 
+// "Out: Wes Owen". Rows saved before the borrower fix may hold "In Library" as
+// the borrower; show plain "Out" for those rather than "Out: In Library".
+const outText = (b) => (b.who && b.who !== 'In Library' ? `Out: ${b.who}` : 'Out');
+
 function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, contactNames }) {
+  const [whoErr, setWhoErr] = useState(false);
   if (!book) return null;
   const io   = ioLabel(book.io);
   const lost = lostLabel(book.lost);
+  const whoValue = contactNames.includes(book.who) ? book.who : '';
+
+  // Out starts with nobody chosen; In always means "In Library".
+  const handleStatusChange = (value) => {
+    onChange('io', value);
+    onChange('who', value === 'Out' ? '' : 'In Library');
+    setWhoErr(false);
+  };
+  const trySave = () => {
+    if (io === 'Out' && !whoValue) { setWhoErr(true); return; }
+    setWhoErr(false);
+    onSave();
+  };
 
   const field = (label, key, type = 'text') => (
     <TextField
@@ -95,7 +113,7 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
 
         <TextField
           label="Status" select value={io}
-          onChange={(e) => onChange('io', e.target.value)}
+          onChange={(e) => handleStatusChange(e.target.value)}
           fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
         >
           {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
@@ -103,8 +121,9 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
 
         {io === 'Out' && (
           <TextField
-            label="Checked out to" select value={book.who || ''}
-            onChange={(e) => onChange('who', e.target.value)}
+            label="Checked out to" select value={whoValue}
+            onChange={(e) => { onChange('who', e.target.value); setWhoErr(false); }}
+            error={whoErr} helperText={whoErr ? 'Choose who has this book.' : ''}
             fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
           >
             <option value="" disabled></option>
@@ -122,7 +141,7 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={onSave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
+        <Button onClick={trySave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
       </DialogActions>
     </Dialog>
   );
@@ -131,7 +150,7 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
 export default function BooksPage() {
   const { state } = useAppContext();
   const { user } = state;
-  const { books, getBooks, addBook, uploadBookCover, handleBookChange, startEditingBook, stopEditingBook, deleteBook } = useBooks();
+  const { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook } = useBooks();
   const { contacts, getContacts } = useContacts();
 
   const [search,     setSearch]     = useState('');
@@ -148,22 +167,26 @@ export default function BooksPage() {
     `${b.title} ${b.author}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openEdit = (i) => {
-    startEditingBook(i);
+  // Index into `books` (not the filtered list), so search never edits or deletes the wrong book.
+  const realIndex = (book) => books.findIndex((x) => x === book);
+
+  const openEdit = (book) => {
     setEditFile(null);
-    setDialog({ idx: i, book: { ...books[i], io: ioLabel(books[i].io), lost: lostLabel(books[i].lost) } });
+    setDialog({ book: { ...book, io: ioLabel(book.io), lost: lostLabel(book.lost) } });
   };
 
+  // The dialog holds the whole edited row, so save that row directly.
   const handleDialogChange = (field, value) => {
     setDialog((d) => ({ ...d, book: { ...d.book, [field]: value } }));
-    handleBookChange(field, value, dialog.idx);
   };
 
   const handleSave = async () => {
-    // Upload the cover (or trigger the placeholder fallback) before saving the row
-    const imgUrl = await uploadBookCover(dialog.book.title, editFile, null);
-    if (imgUrl) handleBookChange('img_url', imgUrl, dialog.idx);
-    await stopEditingBook();
+    const bk = dialog.book;
+    // Only upload when a new file was chosen or there is no cover yet: an
+    // upload with no file overwrites the stored cover with the placeholder.
+    const imgUrl = (editFile || !bk.img_url) ? await uploadBookCover(bk.title, editFile, null) : null;
+    const err = await saveBook({ ...bk, img_url: imgUrl || bk.img_url });
+    if (err) return; // server message is already shown; keep the dialog open
     setDialog(null);
     setEditFile(null);
   };
@@ -172,7 +195,8 @@ export default function BooksPage() {
 
   const handleAddSave = async () => {
     const imgUrl = await uploadBookCover(newBook.title, newFile, null);
-    await addBook({ ...newBook, img_url: imgUrl || '' });
+    const err = await addBook({ ...newBook, img_url: imgUrl || '' });
+    if (err) return;
     setNewBook(null);
     setNewFile(null);
   };
@@ -199,8 +223,8 @@ export default function BooksPage() {
       </div>
 
       <div style={sxStyles.grid}>
-        {filtered.map((book, i) => (
-          <Card key={book.id || i} sx={sxStyles.card} elevation={3}>
+        {filtered.map((book, k) => (
+          <Card key={book.id || k} sx={sxStyles.card} elevation={3}>
             <CardMedia
               component="img"
               sx={sxStyles.media}
@@ -220,13 +244,13 @@ export default function BooksPage() {
               <Typography sx={sxStyles.cardAuthor}>{book.author}</Typography>
               {ioLabel(book.io) === 'Out' && (
                 <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>
-                  {book.who ? `Out: ${book.who}` : 'Out'}
+                  {outText(book)}
                 </Typography>
               )}
             </CardContent>
             <CardActions style={{ padding: '0 4px 4px' }}>
-              <IconButton size="small" onClick={() => openEdit(i)}><EditIcon fontSize="small" /></IconButton>
-              <IconButton size="small" onClick={() => deleteBook(i)}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={() => openEdit(book)}><EditIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={() => deleteBook(realIndex(book))}><DeleteIcon fontSize="small" /></IconButton>
             </CardActions>
           </Card>
         ))}

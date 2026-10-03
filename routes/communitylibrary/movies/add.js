@@ -1,29 +1,26 @@
 const express = require('express');
-const { ioToDb, lostToDb } = require('../../../utils/coerce');
+const { lostToDb } = require('../../../utils/coerce');
 const { insertMovie } = require('../../../db/sql/communitylibrary/movies');
 const { communitylibrary } = require('../../../db/db');
-const { slotFields, normalizeCollection, checkWho } = require('./_fields');
+const { buildMovie, perFilmStatusSent } = require('./_fields');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
   const b = req.body;
-  const ioVal   = ioToDb(b.io);
-  const lostVal = lostToDb(b.lost);
-  const whoErr = checkWho(ioVal, b.who);
-  if (whoErr) return res.status(400).json({ error: whoErr });
-  const col = normalizeCollection(b);
+  const m = buildMovie(b, perFilmStatusSent(b));
+  if (m.error) return res.status(400).json({ error: m.error });
   const params = [
     req.params.user_id,
     b.name || '',
-    col.featureMedia,
-    col.numMovie,
-    ...slotFields(b),
-    ioVal,
-    ioVal === 1 ? 'In Library' : b.who.trim(),
-    lostVal,
+    m.featureMedia,
+    m.numMovie,
+    ...m.slotParams,
+    m.io,
+    m.who,
+    lostToDb(b.lost),
     b.img_url || '',
   ];
-  // Expect exactly 68 params to match insertMovie's 68 placeholders
+  // Expect exactly 104 params to match insertMovie's 104 placeholders
   try {
     await communitylibrary.promise().query(insertMovie, params);
     return res.json({ message: 'Movie added' });

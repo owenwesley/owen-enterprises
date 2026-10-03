@@ -1,6 +1,6 @@
 {
   "name": "bgtracker-server",
-  "version": "1.11.8",
+  "version": "1.11.9",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

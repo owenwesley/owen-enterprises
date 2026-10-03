@@ -1,10 +1,10 @@
 const express = require('express');
-const { ioToDb, lostToDb } = require('../../../utils/coerce');
+const { lostToDb } = require('../../../utils/coerce');
 const { updateReply } = require('../../../utils/dbRespond');
 const { mergeExisting } = require('../../../utils/mergeExisting');
 const { updateMovie } = require('../../../db/sql/communitylibrary/movies');
 const { communitylibrary } = require('../../../db/db');
-const { slotFields, normalizeCollection, checkWho } = require('./_fields');
+const { buildMovie, perFilmStatusSent } = require('./_fields');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -12,24 +12,25 @@ router.post('/:user_id', async (req, res) => {
   try {
     const b = await mergeExisting(communitylibrary, 'movies', req.body.id, req.params.user_id, req.body);
     if (!b) return reply(null, { affectedRows: 0 });
-    const ioVal   = ioToDb(b.io);
-    const lostVal = lostToDb(b.lost);
-    const whoErr = checkWho(ioVal, b.who);
-    if (whoErr) return res.status(400).json({ error: whoErr });
-    const col = normalizeCollection(b);
+    const m = buildMovie(b, perFilmStatusSent(req.body) || (
+      // A full stored row always carries per-film status; only a sparse body
+      // that sets disc-level io/who alone should apply to every film.
+      req.body.io === undefined && req.body.who === undefined
+    ));
+    if (m.error) return res.status(400).json({ error: m.error });
     const params = [
       b.name || '',
-      col.featureMedia,
-      col.numMovie,
-      ...slotFields(b),
-      ioVal,
-      ioVal === 1 ? 'In Library' : b.who.trim(),
-      lostVal,
+      m.featureMedia,
+      m.numMovie,
+      ...m.slotParams,
+      m.io,
+      m.who,
+      lostToDb(b.lost),
       b.img_url || '',
       b.id,
       req.params.user_id,
     ];
-    // Expect exactly 69 params: 67 SET values + id + user_id
+    // Expect exactly 105 params: 103 SET values + id + user_id
     const [result] = await communitylibrary.promise().query(updateMovie, params);
     reply(null, result);
   } catch (err) {

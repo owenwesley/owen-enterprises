@@ -6,11 +6,16 @@
 // failed with "Unknown column".)
 //
 // Param order, add:  user_id, name, featureMedia, numMovie, 12 x (name, rated,
-//                    length, yearR, media), io, who, lost, img_url   = 68
-// Param order, edit: the same without user_id, then id, user_id      = 69
+//                    length, yearR, media, io, who, img), io, who, lost,
+//                    img_url                                         = 104
+// Param order, edit: the same without user_id, then id, user_id      = 105
+//
+// Per film (slot) io / who / img: whether THAT film is out and with whom, and
+// its own picture. The disc-level io / who are a summary the server derives
+// from the films (see _fields.js buildMovie); img_url is the set's cover.
 const slotCols = [];
 for (let i = 1; i <= 12; i++) {
-  slotCols.push(`name${i}`, `rated${i}`, `length${i}`, `yearR${i}`, `media${i}`);
+  slotCols.push(`name${i}`, `rated${i}`, `length${i}`, `yearR${i}`, `media${i}`, `io${i}`, `who${i}`, `img${i}`);
 }
 
 // Every column except id and user_id, in route order.

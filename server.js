@@ -15,6 +15,7 @@ const { scheduleRetention } = require('./db/retention');
 const { scheduleRebuild } = require('./db/maintenance/scheduleRebuild');
 const migrateDates = require('./db/migrateDates');
 const migrateInsulinColumns = require('./db/migrateInsulinColumns');
+const migrateMovieSlots = require('./db/migrateMovieSlots');
 const backfillInviteCodes = require('./db/backfillInviteCodes');
 
 const port = process.env.PORT || 4000;
@@ -98,6 +99,9 @@ initDatabases()
   // Moves any historical insulinB/insulinBed values into insulinSB/insulinSBed
   // and drops the retired columns (see db/migrateInsulinColumns.js).
   .then(() => migrateInsulinColumns())
+  // Copies an Out movie's borrower onto its films now that each film has its
+  // own status (see db/migrateMovieSlots.js).
+  .then(() => migrateMovieSlots())
   // Fills in an inviteCode for any doctor account that predates it. Never
   // throws — it logs and carries on.
   .then(() => backfillInviteCodes())

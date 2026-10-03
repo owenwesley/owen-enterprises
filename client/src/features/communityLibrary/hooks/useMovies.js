@@ -17,6 +17,9 @@ export function featureTypeFor(n) {
   return ({ 1: '', 2: 'Double Feature', 3: 'Triple Feature', 4: 'Quadruple Feature' })[n] ?? 'Box Set';
 }
 
+/** DB 1/0 or 'In'/'Out' -> 'In' | 'Out'. */
+export const ioLabel = (v) => (v === 1 || v === '1' || v === 'In' ? 'In' : 'Out');
+
 /** All film slots 1..numMovie for a movie row, in order (empty titles included). */
 export function collectionSlots(movie) {
   const slots = [];
@@ -29,25 +32,60 @@ export function collectionSlots(movie) {
       len:   movie[`length${i}`] || 0,
       year:  movie[`yearR${i}`]  || 0,
       media: movie[`media${i}`]  || 'DVD',
+      io:    ioLabel(movie[`io${i}`] ?? 1),
+      who:   movie[`who${i}`] || '',
+      img:   movie[`img${i}`] || '',
     });
   }
   return slots;
+}
+
+/**
+ * Short "who has it" text for a card. Single: "Out: Wes Owen". Set: "Out: Wes
+ * Owen" when every film is out with one person, "2 of 3 out" otherwise.
+ * Returns '' when nothing is out. Rows saved before the borrower fix may hold
+ * "In Library" as the borrower; those read plain "Out".
+ */
+export function outSummary(movie) {
+  const name = (w) => (w && w !== 'In Library' ? `Out: ${w}` : 'Out');
+  if (filmCount(movie) === 1) {
+    return ioLabel(movie.io) === 'Out' ? name(movie.who) : '';
+  }
+  const out = collectionSlots(movie).filter((s) => s.io === 'Out');
+  if (!out.length) return '';
+  const total = filmCount(movie);
+  const who = [...new Set(out.map((s) => s.who))];
+  if (out.length === total) return who.length === 1 ? name(who[0]) : `All ${total} out`;
+  return who.length === 1 && who[0] && who[0] !== 'In Library'
+    ? `${out.length} of ${total} out: ${who[0]}` : `${out.length} of ${total} out`;
+}
+
+/** Copies one film's fields from slot `from` to slot `to` ('' / defaults when from > 12). */
+function copySlot(src, out, from, to) {
+  const ok = from <= 12;
+  out[`name${to}`]   = ok ? src[`name${from}`]   : '';
+  out[`rated${to}`]  = ok ? src[`rated${from}`]  : 'NR';
+  out[`length${to}`] = ok ? src[`length${from}`] : 0;
+  out[`yearR${to}`]  = ok ? src[`yearR${from}`]  : 0;
+  out[`media${to}`]  = ok ? src[`media${from}`]  : 'DVD';
+  out[`io${to}`]     = ok ? src[`io${from}`]     : 1;
+  out[`who${to}`]    = ok ? src[`who${from}`]    : 'In Library';
+  out[`img${to}`]    = ok ? src[`img${from}`]    : '';
 }
 
 /** Returns a copy of the movie with film `slot` removed and later films shifted up. */
 export function removeFilm(movie, slot) {
   const n = filmCount(movie);
   const out = { ...movie };
-  for (let i = slot; i <= 12; i++) {
-    const from = i + 1;
-    out[`name${i}`]   = from <= 12 ? movie[`name${from}`]   : '';
-    out[`rated${i}`]  = from <= 12 ? movie[`rated${from}`]  : 'NR';
-    out[`length${i}`] = from <= 12 ? movie[`length${from}`] : 0;
-    out[`yearR${i}`]  = from <= 12 ? movie[`yearR${from}`]  : 0;
-    out[`media${i}`]  = from <= 12 ? movie[`media${from}`]  : 'DVD';
-  }
+  for (let i = slot; i <= 12; i++) copySlot(movie, out, i + 1, i);
   out.numMovie = Math.max(n - 1, 1);
   out.featureMedia = featureTypeFor(out.numMovie);
+  // A set that drops to one film becomes a single: its status lives on the disc.
+  if (out.numMovie === 1) {
+    out.io = out.io1;
+    out.who = out.who1;
+    out.img_url = out.img1 || out.img_url;
+  }
   return out;
 }
 
@@ -63,13 +101,16 @@ export function emptyMovie() {
     row[`length${i}`] = 0;
     row[`yearR${i}`]  = 0;
     row[`media${i}`]  = 'DVD';
+    row[`io${i}`]     = 'In';
+    row[`who${i}`]    = '';
+    row[`img${i}`]    = '';
   }
   return row;
 }
 
 export function useMovies() {
   const { state, dispatch } = useAppContext();
-  const { movies, user, editIdx } = state;
+  const { movies, user } = state;
 
   const getMovies = useCallback(async () => {
     if (!user.id) return;
@@ -91,10 +132,12 @@ export function useMovies() {
     return data?.img_url || null;
   }, []);
 
+  /** Adds a movie. Returns an error string or null. */
   const addMovie = useCallback(async (movie) => {
-    if (!user.id) return;
-    await postFetch(`/communitylibrary/movies/add/${user.id}`, { ...emptyMovie(), ...movie });
+    if (!user.id) return null;
+    const res = await postFetch(`/communitylibrary/movies/add/${user.id}`, { ...emptyMovie(), ...movie });
     await getMovies();
+    return res?.error || null;
   }, [user.id, getMovies]);
 
   /** Saves a whole movie row straight away (used by the collection grid). Returns an error string or null. */
@@ -104,32 +147,10 @@ export function useMovies() {
     return res?.error || null;
   }, [user.id, getMovies]);
 
-  const handleMovieChange = useCallback((field, value, i) => {
-    dispatch({
-      type: 'SET_MOVIES',
-      payload: movies.map((m, j) => j === i ? { ...m, [field]: value } : m),
-    });
-  }, [movies, dispatch]);
-
-  const startEditingMovie = useCallback((i) => {
-    dispatch({ type: 'SET_EDIT_IDX', payload: i });
-  }, [dispatch]);
-
-  const stopEditingMovie = useCallback(async () => {
-    const movie = movies[editIdx];
-    dispatch({ type: 'SET_EDIT_IDX', payload: -1 });
-    await postFetch(`/communitylibrary/movies/edit/${user.id}`, movie);
-    await getMovies();
-  }, [movies, editIdx, user.id, dispatch, getMovies]);
-
   const deleteMovie = useCallback(async (i) => {
     await postFetch(`/communitylibrary/movies/delete/${user.id}`, { id: movies[i].id });
     await getMovies();
   }, [movies, user.id, getMovies]);
 
-  return {
-    movies, editIdx,
-    getMovies, addMovie, saveMovie, uploadMoviePoster,
-    handleMovieChange, startEditingMovie, stopEditingMovie, deleteMovie,
-  };
+  return { movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie };
 }

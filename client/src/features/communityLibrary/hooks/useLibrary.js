@@ -5,7 +5,7 @@ import { getFetch, postFetch, postFormData } from '../../../utils/api';
 // ── useBooks ──────────────────────────────────────────────────────────────────
 export function useBooks() {
   const { state, dispatch } = useAppContext();
-  const { books, user, editIdx } = state;
+  const { books, user } = state;
 
   // getFetch uses registerTokenGetter so it always sends the current token —
   // no need to include state.token in the dep array.
@@ -28,39 +28,30 @@ export function useBooks() {
     return data?.img_url || null;
   }, []);
 
+  /** Adds a book. Returns an error string or null. */
   const addBook = useCallback(async (book) => {
-    if (!user.id) return;
-    await postFetch(`/communitylibrary/books/add/${user.id}`, {
+    if (!user.id) return null;
+    const res = await postFetch(`/communitylibrary/books/add/${user.id}`, {
       title: 'New Book', author: '', publisher: '', copywrite: '',
       isbn: '', io: 'In', who: 'In Library', lost: 'No', img_url: '',
       ...book,
     });
     await getBooks();
+    return res?.error || null;
   }, [user.id, getBooks]);
 
-  const handleBookChange = useCallback((field, value, i) => {
-    dispatch({
-      type: 'SET_BOOKS',
-      payload: books.map((b, j) => j === i ? { ...b, [field]: value } : b),
-    });
-  }, [books, dispatch]);
-
-  const startEditingBook = useCallback((i) => {
-    dispatch({ type: 'SET_EDIT_IDX', payload: i });
-  }, [dispatch]);
-
-  const stopEditingBook = useCallback(async () => {
-    const book = books[editIdx];
-    dispatch({ type: 'SET_EDIT_IDX', payload: -1 });
-    await postFetch(`/communitylibrary/books/edit/${user.id}`, book);
+  /** Saves a whole book row straight away (the dialog holds the edited row). Returns an error string or null. */
+  const saveBook = useCallback(async (book) => {
+    const res = await postFetch(`/communitylibrary/books/edit/${user.id}`, book);
     await getBooks();
-  }, [books, editIdx, user.id, dispatch, getBooks]);
+    return res?.error || null;
+  }, [user.id, getBooks]);
 
   const deleteBook = useCallback(async (i) => {
     await postFetch(`/communitylibrary/books/delete/${user.id}`, { id: books[i].id });
     await getBooks();
   }, [books, user.id, getBooks]);
 
-  return { books, getBooks, addBook, uploadBookCover, handleBookChange, startEditingBook, stopEditingBook, deleteBook };
+  return { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook };
 }
 
