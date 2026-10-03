@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.11** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.12** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -313,6 +313,10 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.11.12** — Weight Add works on an empty table again.
+- **Reverted the 1.11.10 blank-form guard in `useWeights.js` `addWeight`.** Add must save a row of zeros (the date plus 0 kg / 0 lbs / 0 BMI) so a new user can start, then edit the row. The guard made Add do nothing for a user with no weights. Editing a row to 0 kg is still refused (unchanged).
+- No schema change, no server change.
+
 **1.11.11** — Weight tracker and chart keep 90 days, not 91 (or 120).
 - **Weights are capped at the newest 90 on the server:** `weights/add.js` runs the new `trimWeights` SQL after every insert. The old browser-side trim deleted only ONE row when the table had 90 or more, so a table already at 91 stayed at 91 (and a failed delete left it there). Any user already over 90 is corrected on their next add.
 - `useWeights.js` no longer deletes the oldest row itself; it shows the newest 90 and refetches.
@@ -321,7 +325,7 @@ Please read these before putting real users' data on it.
 
 **1.11.10** — Small fixes: medication deduction, blank weight, Contacts, delete confirms, film search.
 - **Bug fixed, `useReadings.js` `stopEditingReading`:** the Meds-tick deduction was saved from the ORIGINAL medication list, so for a medication that was also reduced by the sliding-scale dose in the same save, the second write started from the old quantity and overwrote the first. One working medication list now goes through both steps, and the final quantities are put in state once. (Found by reading; not reproduced against a database.)
-- **Weight Add:** a blank form (no kg and no lbs) is refused with a toast instead of saving 0 kg.
+- **Weight Add:** (SUPERSEDED in 1.11.12: the blank-form refusal was removed.)
 - **Contacts:** same fix books/movies got. The dialog holds its own copy and saves it through new `saveContact`; edit/delete use the real index (a search no longer edits or deletes the wrong contact); deleting asks to confirm. `handleContactChange`, `startEditingContact`, `stopEditingContact` and `editIdx` are gone from `useContacts`.
 - **Delete confirms:** deleting a whole book, movie or set now asks first.
 - **Movies search:** also matches film titles inside a set.
