@@ -151,6 +151,7 @@ export const quarterly = (readings, timesPD, rate) => {
 export const getLabels = (type, values = []) => {
   switch (type) {
     case 'bp':
+    case 'weight':
       return values.slice(-90).map((_, i) => String(i + 1));
     case '120':
       return values.slice(-120).map((_, i) => String(i + 1));

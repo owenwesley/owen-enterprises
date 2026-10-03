@@ -31,15 +31,9 @@ export function useWeights() {
     }
     const newRow = { user_id: user.id, date, kg, lbs, bmi };
 
-    let updated = [...weights];
-    if (weights.length >= 90) {
-      // Delete oldest record (index 0) to make room
-      await postFetch(`/bgtracker/weights/delete/${user.id}`, {
-        id: weights[0]?.id,
-      }).catch(console.error);
-      updated.splice(0, 1);
-    }
-    updated = [...updated, newRow];
+    // The server keeps only the newest 90 rows; mirror that here so the table
+    // and chart are right before the refetch below.
+    const updated = [...weights, newRow].slice(-90);
     dispatch({ type: 'SET_WEIGHTS', payload: updated });
     await postFetch(`/bgtracker/weights/add/${user.id}`, newRow).catch(console.error);
     await getWeights(user.id);   // pick up the new row's real id (needed to edit it)

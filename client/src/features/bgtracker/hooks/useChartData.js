@@ -173,8 +173,8 @@ export function useChartData() {
   // ── Weight line chart (LBS / KG / BMI) ─────────────────────────────────────
   const buildWeightChart = useCallback(() => {
     if (!weights) return;
-    const last120 = weights.slice(-120);
-    const dates = last120.map((w) => formatDate(w.date));
+    const last90 = weights.slice(-90);
+    const dates = last90.map((w) => formatDate(w.date));
     const mkLine = (label, r, g, b, data) => ({
       label, data, dates, fill: false, lineTension: 0.1,
       backgroundColor: `rgba(${r},${g},${b},0.4)`,
@@ -186,11 +186,11 @@ export function useChartData() {
     dispatch({
       type: 'SET_WEIGHT_CHART',
       payload: {
-        labels: getLabels('120', weights),
+        labels: getLabels('weight', weights),
         datasets: [
-          mkLine('LBS', 255, 0,   0,   last120.map((w) => Number(w.lbs) || 0)),
-          mkLine('KG',  0,   0,   255, last120.map((w) => Number(w.kg)  || 0)),
-          mkLine('BMI', 0,   150, 0,   last120.map((w) => Number(w.bmi) || 0)),
+          mkLine('LBS', 255, 0,   0,   last90.map((w) => Number(w.lbs) || 0)),
+          mkLine('KG',  0,   0,   255, last90.map((w) => Number(w.kg)  || 0)),
+          mkLine('BMI', 0,   150, 0,   last90.map((w) => Number(w.bmi) || 0)),
         ],
       },
     });

@@ -14,10 +14,20 @@ const insertWeights =
     ?,?,?,?,?)`;
 
 // Targeted delete by row id — routes/bgtracker/weights/delete.js imports this
-// (and useWeights.js's 90-row auto-trim calls the delete route internally),
+// (the 90-row cap is now trimWeights, run by the add route),
 // but it never existed here, so every weights delete threw
 // "Cannot read properties of undefined (reading 'length')" before this fix.
 const deleteWeightById = `DELETE FROM weights WHERE id=? AND user_id=?`;
+
+// Keep only the newest 90 weights for a user (newest = latest date, then id).
+// Params: user_id, user_id. Run after every add, so the cap is enforced on
+// the server and does not depend on the browser (the old client-side trim
+// removed just one row, so a table already at 91 stayed at 91).
+const trimWeights =
+  `DELETE FROM weights WHERE user_id=? AND id NOT IN (
+     SELECT id FROM (
+       SELECT id FROM weights WHERE user_id=? ORDER BY date DESC, id DESC LIMIT 90
+     ) AS keep)`;
 
 const selectWeights =
   `SELECT id,user_id,date,kg,lbs,bmi FROM weights`;
@@ -30,5 +40,6 @@ module.exports = {
   deleteWeightById,
   insertWeights,
   selectWeights,
+  trimWeights,
   updateWeight
 };
