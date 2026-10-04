@@ -14,10 +14,15 @@
  * (this includes their doctor_profiles row and any doctor<->patient links,
  * whether they were the doctor or the patient), then the users row itself.
  * Refuses to delete the last admin. Take a backup first. Irreversible.
+ *
+ * Also called by the app: DELETE /auth/account (routes/auth.js) runs
+ * main(userName, true, () => {}) after checking the person's password. The
+ * ids of the remaining users are NOT renumbered here; the weekly rebuild
+ * (scheduleRebuild.js) closes the gap, with test accounts last.
  */
 const { USER_COLS, q, qt, makePool, findRefColumns, isInnoDB, dbNames } = require('./idRefs');
 
-async function main(userName, apply) {
+async function main(userName, apply, log = console.log) {
   const gateway = dbNames().gateway;
   const pool = makePool();
   const conn = await pool.getConnection();
@@ -26,7 +31,7 @@ async function main(userName, apply) {
       `SELECT id, userName, firstName, lastName, role FROM ${qt(gateway, 'users')} WHERE userName = ?`, [userName]);
     if (users.length === 0) throw new Error(`no user named "${userName}"`);
     const u = users[0];
-    console.log(`User #${u.id}: ${u.userName} (${u.firstName} ${u.lastName}), role ${u.role}`);
+    log(`User #${u.id}: ${u.userName} (${u.firstName} ${u.lastName}), role ${u.role}`);
 
     if (u.role === 'admin') {
       const [[a]] = await conn.query(`SELECT COUNT(*) AS n FROM ${qt(gateway, 'users')} WHERE role='admin' AND id <> ?`, [u.id]);
@@ -41,13 +46,13 @@ async function main(userName, apply) {
       if (Number(c.n) > 0) plan.push({ ...r, n: Number(c.n) });
     }
 
-    console.log(apply ? 'Deleting:' : 'Would delete (report only, nothing changed):');
-    for (const p of plan) console.log(`  ${p.schema}.${p.table}.${p.column}: ${p.n} row(s)`);
-    console.log(`  ${gateway}.users: 1 row`);
+    log(apply ? 'Deleting:' : 'Would delete (report only, nothing changed):');
+    for (const p of plan) log(`  ${p.schema}.${p.table}.${p.column}: ${p.n} row(s)`);
+    log(`  ${gateway}.users: 1 row`);
 
     if (!apply) {
-      console.log('\nRe-run with --apply to delete (take a backup first; this cannot be undone).');
-      return;
+      log('\nRe-run with --apply to delete (take a backup first; this cannot be undone).');
+      return { deleted: false, userId: u.id, rows: plan };
     }
 
     const bad = plan.filter((p) => !isInnoDB(p));
@@ -68,7 +73,8 @@ async function main(userName, apply) {
       await conn.rollback();
       throw e;
     }
-    console.log(`\nDeleted user ${u.userName} and all of their data.`);
+    log(`\nDeleted user ${u.userName} and all of their data.`);
+    return { deleted: true, userId: u.id, rows: plan };
   } finally {
     conn.release();
     await pool.end();

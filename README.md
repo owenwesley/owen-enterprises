@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.12** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.13** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -313,6 +313,15 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.11.13** — Account menu (upper right), Delete my account, and test accounts last in the weekly renumber.
+- **Account menu:** `components/NavBar/AccountMenu.jsx` replaces the separate My doctors / Profile / Feature access icons and the Logout button with one avatar + first-name button (avatar only on phones). Everyone: My profile, Feature access, Log out. Patients also get My doctors (BG Tracker on), a Switch feature list (only the features they have on) and Delete my account. Doctors get Doctor home and My clinic; admins get Doctor approvals.
+- **Delete my account:** `DELETE /auth/account` (body `{ password }`, signed-in user only, identified by the token). Needs the correct password; the dialog also asks for the word DELETE. **Patients only for now:** doctor and admin accounts get 403 (the owner removes them with `db/maintenance/deleteUser.js`). It runs the same transaction as `deleteUser.js` (`main(userName, true, log)`, which now takes a `log` function and returns a summary), so every row in all four databases goes or nothing does. The person is signed out and the token stops working.
+- **Renumbering:** a delete does NOT renumber the other users at once (that would log everyone out). The weekly rebuild (Sunday 12-4 AM, `MAINTENANCE_REBUILD_ENABLED=true`) closes the gap and remaps every `user_id` / `doctor_id` / `patient_id`.
+- **Test accounts last:** for the `users` table only, `scheduleRebuild.js` hands out the new ids with `(userName LIKE 'test%'), id`: user names starting with "test" (case-insensitive, so `test`, `Test2`, `testuser`; also any real user whose name starts with "test") come last, each group in old id order. Manual run: `node db/maintenance/rebuildTable.js users owenenterprises --reorder="(userName LIKE 'test%'), id"`.
+- **Verified on MariaDB 10.11:** wrong/missing password, no token, admin and doctor all refused with nothing deleted; a patient delete removed the user, their weights and feature preferences; the old token then got 401; the real `runRebuildAll` renumbered 5 users to 1..5 with test, testuser2 and Tester9 last and every user's rows still attached to the right person; a fresh login worked. `vite build` succeeds.
+- **Not tested:** the menu and dialog in a real browser or on a phone; MySQL 8. Uploaded book/movie images are not tied to a user and are not removed.
+- No schema change.
+
 **1.11.12** — Weight Add works on an empty table again.
 - **Reverted the 1.11.10 blank-form guard in `useWeights.js` `addWeight`.** Add must save a row of zeros (the date plus 0 kg / 0 lbs / 0 BMI) so a new user can start, then edit the row. The guard made Add do nothing for a user with no weights. Editing a row to 0 kg is still refused (unchanged).
 - No schema change, no server change.
@@ -470,7 +479,7 @@ Please read these before putting real users' data on it.
 **1.10.7** — Orphan cleanup tooling: `cleanOrphans.js` and `deleteUser.js`.
 - **`db/maintenance/idRefs.js`:** shared helper, factored out of the id-reference lookup `rebuildTable.js` already did, so the new scripts and `rebuildTable.js` agree on what counts as a reference.
 - **`db/maintenance/cleanOrphans.js`:** reports rows that point at a deleted `users` or `clinics` row (report-only by default; `--apply` fixes them in one transaction). A `user_id`/`doctor_id`/`patient_id` orphan is deleted; a `clinic_id` orphan is set to `NULL`; a `requestedClinicId` orphan is cleared along with `clinicRequestStatus`, back to `'none'`. This is what `rebuildTable.js`'s refusal message has been asking users to fix by hand since 1.10.4.
-- **`db/maintenance/deleteUser.js`:** the app still has no delete-account feature; this is the safe way to remove one by hand. Deletes the user's rows in every table that references them, then the `users` row, all in one transaction. Refuses to delete the last admin. Report-only by default, `--apply` deletes.
+- **`db/maintenance/deleteUser.js`:** the app had no delete-account feature then (added in 1.11.13 for patients); this is still the way to remove a doctor or admin by hand. Deletes the user's rows in every table that references them, then the `users` row, all in one transaction. Refuses to delete the last admin. Report-only by default, `--apply` deletes.
 - **Verified** against MariaDB 10.11 on the project's real schema: seeded orphans in `bgtracker.preferences`, `owenenterprises.feature_preferences`, and a stale `doctor_profiles.requestedClinicId`; `cleanOrphans.js` (report, then `--apply`) found and fixed all three, a second report run showed clean, and `rebuildTable.js users` / `rebuildTable.js clinics` then both renumbered successfully. `deleteUser.js` tested report and `--apply` on a user with rows in three tables (left no orphans behind, confirmed by `cleanOrphans.js` and a working `rebuildTable.js` renumber afterward), the last-admin refusal, and the unknown-username error.
 - **Not changed:** the app still has no way to create these orphans in normal use through the UI (no delete-account feature) — they only build up from deleting rows by hand outside the app.
 

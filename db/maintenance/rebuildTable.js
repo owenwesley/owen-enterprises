@@ -21,6 +21,8 @@
  *   node db/maintenance/rebuildTable.js <table> <database>
  *   node db/maintenance/rebuildTable.js <table> <database> --reorder="date, id"
  *   node db/maintenance/rebuildTable.js <table> <database> --keep-ids
+ *   Users, test accounts last (what the weekly job does for `users`):
+ *   node db/maintenance/rebuildTable.js users owenenterprises --reorder="(`userName` LIKE 'test%'), `id`"
  *
  *   --reorder="<ORDER BY list>"  hand out the new ids in this order instead of
  *                                old-id order (e.g. "name, id").

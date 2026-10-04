@@ -3,12 +3,8 @@ import { BrowserRouter as Router, Switch, Route, Link, Redirect, useLocation } f
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import HomeIcon from '@mui/icons-material/Home';
-import SettingsIcon from '@mui/icons-material/Settings';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import Tooltip from '@mui/material/Tooltip';
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
@@ -17,7 +13,6 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import MenuIcon from '@mui/icons-material/Menu';
-import LogoutIcon from '@mui/icons-material/Logout';
 
 import { useAppContext } from '../../context/AppContext';
 import { registerTokenGetter } from '../../utils/api';
@@ -28,6 +23,7 @@ import { useReadings } from '../../features/bgtracker/hooks/useReadings';
 import { useChairs } from '../../features/meetings/hooks/useChairs';
 import { useMemos } from '../../features/meetings/hooks/useMemos';
 
+import AccountMenu from './AccountMenu';
 import LoginPage from '../../pages/LoginPage';
 import RegisterPage from '../../pages/RegisterPage';
 import FeaturePreferencesPage from '../../pages/FeaturePreferencesPage';
@@ -126,7 +122,7 @@ function ResetEditOnNavigate() {
 // and a compact logout so nothing is pushed off-screen.
 function TopBar({ navItems }) {
   const { state, dispatch } = useAppContext();
-  const { user, activeFeature, featurePreferences } = state;
+  const { activeFeature } = state;
   const { pathname } = useLocation();
   // Hamburger + drawer on narrow screens AND on touch devices held sideways
   // (a landscape phone is wider than 900px but only ~400px tall, so the link
@@ -180,30 +176,7 @@ function TopBar({ navItems }) {
                   ))}
                 </Box>
 
-                {user.role === 'patient' && featurePreferences.chkBgtracker === 1 && (
-                  <Tooltip title="My doctors">
-                    <Box component={Link} to="/my-doctors" sx={{ color: 'inherit', display: 'flex', flexShrink: 0 }}>
-                      <IconButton size="small" sx={sx.iconBtn}><LocalHospitalIcon /></IconButton>
-                    </Box>
-                  </Tooltip>
-                )}
-
-                <Tooltip title="My profile">
-                  <Box component={Link} to="/profile" sx={{ color: 'inherit', display: 'flex', flexShrink: 0 }}>
-                    <IconButton size="small" sx={sx.iconBtn}><AccountCircleIcon /></IconButton>
-                  </Box>
-                </Tooltip>
-
-                <Tooltip title="Feature access settings">
-                  <Box component={Link} to="/feature-preferences" sx={{ color: 'inherit', display: 'flex', flexShrink: 0 }}>
-                    <IconButton size="small" sx={sx.iconBtn}><SettingsIcon /></IconButton>
-                  </Box>
-                </Tooltip>
-
-                <Button color="inherit" size="small" sx={{ ml: 1, flexShrink: 0, whiteSpace: 'nowrap' }}
-                  onClick={() => dispatch({ type: 'RESET' })}>
-                  Logout ({user.firstName})
-                </Button>
+                <AccountMenu />
               </Toolbar>
             </AppBar>
     );
@@ -226,15 +199,7 @@ function TopBar({ navItems }) {
         <Typography noWrap sx={{ flex: '1 1 auto', minWidth: 0, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
           {activeFeature ? FEATURE_LABELS[activeFeature] : ''}
         </Typography>
-        {user.role === 'patient' && featurePreferences.chkBgtracker === 1 && (
-          <IconButton component={Link} to="/my-doctors" sx={sx.iconBtn} aria-label="My doctors"><LocalHospitalIcon /></IconButton>
-        )}
-        <IconButton component={Link} to="/profile" sx={sx.iconBtn} aria-label="My profile"><AccountCircleIcon /></IconButton>
-        <IconButton component={Link} to="/feature-preferences" sx={sx.iconBtn} aria-label="Feature access settings"><SettingsIcon /></IconButton>
-        <IconButton edge="end" sx={sx.iconBtn} aria-label={`Log out ${user.firstName || ''}`.trim()}
-          onClick={() => dispatch({ type: 'RESET' })}>
-          <LogoutIcon />
-        </IconButton>
+        <AccountMenu compact />
       </Toolbar>
 
       <Drawer anchor="left" open={open} onClose={close}>

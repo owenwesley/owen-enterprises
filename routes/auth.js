@@ -8,6 +8,7 @@ const {
 } = require('../db/sql/users');
 const authMiddleware = require('../middleware/auth');
 const { genCode: genInviteCode } = require('../db/backfillInviteCodes');
+const deleteUser = require('../db/maintenance/deleteUser');
 
 const router = express.Router();
 const SECRET = process.env.JWT_SECRET || 'owenenterprises_secret_change_in_prod';
@@ -263,6 +264,44 @@ router.put('/profile', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Username already taken', fieldErrors: { userName: 'Username already taken' } });
     }
     return res.status(500).json({ error: e.message });
+  }
+});
+
+// ── DELETE /auth/account — delete the signed-in user's own account (protected) ─
+// Body: { password }. The user is identified by the verified token, never by
+// the URL or body, so nobody can delete someone else. Patients only: doctor
+// accounts (clinic and patient links) and admin accounts are refused here and
+// are removed by the owner with db/maintenance/deleteUser.js.
+// Deletes the person's rows in every database in one transaction (the same
+// code as deleteUser.js). Ids of the remaining users are NOT renumbered now:
+// that would log everyone else out. The weekly rebuild closes the gap.
+router.delete('/account', authMiddleware, async (req, res) => {
+  const password = req.body && req.body.password ? String(req.body.password) : '';
+  try {
+    const rows = await query(selectUser + ' WHERE id=?', [req.user.id]);
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const existing = rows[0];
+
+    if (existing.role === 'admin') {
+      return res.status(403).json({ error: 'Admin accounts cannot be deleted here. Contact the owner.' });
+    }
+    if (existing.role === 'doctor') {
+      return res.status(403).json({ error: 'Doctor accounts cannot be deleted here yet. Contact the owner.' });
+    }
+
+    const ok = password && await bcrypt.compare(password, existing.password);
+    if (!ok) {
+      return res.status(400).json({
+        error: 'Password is incorrect',
+        fieldErrors: { password: 'Password is incorrect' },
+      });
+    }
+
+    await deleteUser(existing.userName, true, () => {});
+    return res.json({ message: 'Account deleted' });
+  } catch (e) {
+    console.error('delete account failed:', e.message);
+    return res.status(500).json({ error: 'Could not delete the account. Nothing was changed.' });
   }
 });
 

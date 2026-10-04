@@ -49,6 +49,9 @@ const mysql = require('mysql2');
 const rebuildTable = require('./rebuildTable');
 const { dbNames } = require('../init');
 
+// ORDER BY list for the users table: non-test accounts first, test accounts last.
+const USERS_TEST_LAST = "(`userName` LIKE 'test%'), `id`";
+
 const WINDOW_DAY = 'Sun';
 const WINDOW_START_HOUR = 0;   // inclusive
 const WINDOW_END_HOUR = 4;     // exclusive
@@ -133,7 +136,12 @@ async function runRebuildAll({ respectWindow = true } = {}) {
       }
       try {
         console.log(`  ${dbName}.${tableName}`);
-        await rebuildTable({ table: tableName, dbName });
+        // users: hand out the new ids with test accounts LAST (user names
+        // that start with "test", e.g. test, test2, TestUser), each group in
+        // its old id order. Every other table keeps plain old-id order.
+        const reorderBy = (dbName === dbNames().gateway && tableName === 'users')
+          ? USERS_TEST_LAST : null;
+        await rebuildTable({ table: tableName, dbName, reorderBy });
         summary.rebuilt.push(`${dbName}.${tableName}`);
       } catch (e) {
         console.error(`  ✗ ${dbName}.${tableName}: ${e.message}`);
@@ -196,4 +204,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { scheduleRebuild, runRebuildAll, inWindow, discoverTables };
+module.exports = { scheduleRebuild, runRebuildAll, inWindow, discoverTables, USERS_TEST_LAST };
