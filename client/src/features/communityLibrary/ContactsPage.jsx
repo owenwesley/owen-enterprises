@@ -22,6 +22,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAppContext } from '../../context/AppContext';
 import { useContacts } from './hooks/useContacts';
+import { FitDialog, FitContent, FieldGrid, Full } from '../../components/DialogFit';
 
 const sxStyles = {
   root:    { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -39,26 +40,28 @@ function ContactDialog({ open, contact, onClose, onChange, onSave }) {
       key={key} label={label} type={type}
       value={contact[key] || ''}
       onChange={(e) => onChange(key, e.target.value)}
-      fullWidth size="small" sx={sxStyles.field}
+      fullWidth size="small"
     />
   );
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <FitDialog open={open} onClose={onClose} maxWidth="sm">
       <DialogTitle>{contact.id ? 'Edit Contact' : 'Add Contact'}</DialogTitle>
-      <DialogContent>
-        {field('First Name', 'firstName')}
-        {field('Last Name',  'lastName')}
-        {field('Phone',      'phoneNum')}
-        {field('Email',      'email', 'email')}
-        {field('Address',    'address')}
-      </DialogContent>
+      <FitContent>
+        <FieldGrid>
+          {field('First Name', 'firstName')}
+          {field('Last Name',  'lastName')}
+          <Full>{field('Phone',   'phoneNum')}</Full>
+          <Full>{field('Email',   'email', 'email')}</Full>
+          <Full>{field('Address', 'address')}</Full>
+        </FieldGrid>
+      </FitContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={onSave} variant="contained" style={{ backgroundColor: '#4527a0', color: '#fff' }}>
           Save
         </Button>
       </DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 

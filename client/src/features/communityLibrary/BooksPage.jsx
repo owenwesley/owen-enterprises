@@ -21,6 +21,7 @@ import Input from '@mui/material/Input';
 import { useBooks } from './hooks/useLibrary';
 import { useContacts } from './hooks/useContacts';
 import { useAppContext } from '../../context/AppContext';
+import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
 
 const PLACEHOLDER = 'https://via.placeholder.com/140x200?text=No+Cover';
 
@@ -80,70 +81,55 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
       fullWidth
       size="small"
       type={type}
-      sx={sxStyles.field}
     />
   );
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <FitDialog open={open} onClose={onClose} maxWidth="sm">
       <DialogTitle>{book.id ? 'Edit Book' : 'Add Book'}</DialogTitle>
-      <DialogContent>
-        {field('Title',     'title')}
-        {field('Author',    'author')}
-        {field('Publisher', 'publisher')}
-        {field('Copyright Year', 'copywrite')}
-        {field('ISBN',      'isbn')}
-        <div style={sxStyles.field}>
-          <Typography variant="caption" style={{ display: 'block', marginBottom: 4, color: '#555' }}>
-            Cover Image
-          </Typography>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFileSelect && onFileSelect(e.target.files?.[0] || null)}
-          />
-          {book.img_url && (
-            <img
-              src={book.img_url}
-              alt="cover preview"
-              style={{ width: 60, height: 90, objectFit: 'cover', marginTop: 6, display: 'block', borderRadius: 4 }}
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          )}
-        </div>
-
-        <TextField
-          label="Status" select value={io}
-          onChange={(e) => handleStatusChange(e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-        >
-          {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-
-        {io === 'Out' && (
+      <FitContent>
+        <FieldGrid>
+          <Full>{field('Title', 'title')}</Full>
+          {field('Author',    'author')}
+          {field('Publisher', 'publisher')}
+          {field('Copyright Year', 'copywrite')}
+          {field('ISBN',      'isbn')}
+          <Full>
+            <ImagePick label="Cover Image" src={book.img_url} onFile={onFileSelect} />
+          </Full>
           <TextField
-            label="Checked out to" select value={whoValue}
-            onChange={(e) => { onChange('who', e.target.value); setWhoErr(false); }}
-            error={whoErr} helperText={whoErr ? 'Choose who has this book.' : ''}
-            fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
+            label="Status" select value={io}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            fullWidth size="small" SelectProps={{ native: true }}
           >
-            <option value="" disabled></option>
-            {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
           </TextField>
-        )}
-
-        <TextField
-          label="Lost?" select value={lost}
-          onChange={(e) => onChange('lost', e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-        >
-          {['No', 'Yes'].map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-      </DialogContent>
+          <TextField
+            label="Lost?" select value={lost}
+            onChange={(e) => onChange('lost', e.target.value)}
+            fullWidth size="small" SelectProps={{ native: true }}
+          >
+            {['No', 'Yes'].map((v) => <option key={v} value={v}>{v}</option>)}
+          </TextField>
+          {io === 'Out' && (
+            <Full>
+              <TextField
+                label="Checked out to" select value={whoValue}
+                onChange={(e) => { onChange('who', e.target.value); setWhoErr(false); }}
+                error={whoErr} helperText={whoErr ? 'Choose who has this book.' : ''}
+                fullWidth size="small" SelectProps={{ native: true }}
+              >
+                <option value="" disabled></option>
+                {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
+              </TextField>
+            </Full>
+          )}
+        </FieldGrid>
+      </FitContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={trySave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
       </DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 

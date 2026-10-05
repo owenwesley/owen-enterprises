@@ -48,6 +48,9 @@ export default function AccountMenu({ compact = false }) {
   const initials = `${(user.firstName || '?')[0]}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const isPatient = user.role === 'patient';
   const enabled = FEATURES.filter((f) => featurePreferences[f.prefKey] === 1);
+  // 'patient' is the account type for every ordinary sign-up. Only call someone a
+  // patient while BG Tracker is on; otherwise (Library / Meetings only) say member.
+  const roleLabel = isPatient && featurePreferences.chkBgtracker !== 1 ? 'member' : user.role;
 
   const switchTo = (key) => {
     close();
@@ -91,7 +94,7 @@ export default function AccountMenu({ compact = false }) {
         slotProps={{ paper: { sx: { minWidth: 230, maxWidth: '90vw' } } }}>
         <Box sx={{ px: 2, py: 1 }}>
           <Typography sx={{ fontWeight: 700 }} noWrap>{user.firstName} {user.lastName}</Typography>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', textTransform: 'capitalize' }}>{user.role}</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', textTransform: 'capitalize' }}>{roleLabel}</Typography>
         </Box>
         <Divider />
 

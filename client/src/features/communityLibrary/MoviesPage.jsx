@@ -25,6 +25,7 @@ import Tab from '@mui/material/Tab';
 import { useAppContext } from '../../context/AppContext';
 import { useMovies, isCollection, filmCount, collectionSlots, removeFilm, emptyMovie, outSummary, ioLabel } from './hooks/useMovies';
 import { useContacts } from './hooks/useContacts';
+import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
 
 const PLACEHOLDER  = 'https://via.placeholder.com/140x200?text=No+Poster';
 const MEDIA_TYPES  = ['VHS', 'DVD', 'HD-DVD', 'Blu-Ray'];
@@ -170,7 +171,7 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, onF
         key={target} label={label} type={type}
         value={movie[target] ?? (type === 'number' ? 0 : '')}
         onChange={(e) => onChange(target, e.target.value)}
-        fullWidth size="small" sx={sxStyles.field}
+        fullWidth size="small"
       />
     );
   };
@@ -180,7 +181,7 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, onF
       <TextField
         key={target} label={label} select value={movie[target] || opts[0]}
         onChange={(e) => onChange(target, e.target.value)}
-        fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
+        fullWidth size="small" SelectProps={{ native: true }}
       >
         {opts.map((v) => <option key={v} value={v}>{v}</option>)}
       </TextField>
@@ -190,144 +191,125 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, onF
     <TextField
       label={label} select value={value} onChange={(e) => onPick(e.target.value)}
       error={error} helperText={error ? helper : ''}
-      fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
+      fullWidth size="small" SelectProps={{ native: true }}
     >
       <option value="" disabled></option>
       {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
     </TextField>
   );
+  const lostField = (
+    <TextField
+      label="Lost?" select value={lost}
+      onChange={(e) => onChange('lost', e.target.value)}
+      fullWidth size="small" SelectProps={{ native: true }}
+    >
+      {['No', 'Yes'].map((v) => <option key={v} value={v}>{v}</option>)}
+    </TextField>
+  );
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <FitDialog open={open} onClose={onClose} maxWidth="sm">
       <DialogTitle>{movie.id ? 'Edit Movie' : 'Add Movie'}</DialogTitle>
-      <DialogContent>
-        {field('Title', 'name')}
-
-        {/* Feature type — selecting this immediately fixes the slot count per the rule table */}
-        <TextField
-          label="Feature Type" select value={movie.featureMedia || ''}
-          onChange={(e) => handleFeatureTypeChange(e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-        >
-          <option value="">Single</option>
-          {FEATURE_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-
-        {/* Box Set only: ask the user how many films (5–12), used verbatim as the slot count */}
-        {movie.featureMedia === 'Box Set' && (
+      <FitContent>
+        <FieldGrid>
+          {/* Feature type — selecting this immediately fixes the slot count per the rule table */}
+          <Full>{field('Title', 'name')}</Full>
           <TextField
-            label={`Number of films (${BOXSET_MIN}–${BOXSET_MAX})`} type="number"
-            value={movie.numMovie || BOXSET_MIN}
-            inputProps={{ min: BOXSET_MIN, max: BOXSET_MAX }}
-            onChange={(e) => handleBoxSetCountChange(e.target.value)}
-            fullWidth size="small" sx={sxStyles.field}
-          />
-        )}
+            label="Feature Type" select value={movie.featureMedia || ''}
+            onChange={(e) => handleFeatureTypeChange(e.target.value)}
+            fullWidth size="small" SelectProps={{ native: true }}
+          >
+            <option value="">Single</option>
+            {FEATURE_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </TextField>
 
-        {isSet ? (
-          <>
-            <div style={{ ...sxStyles.field, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Button size="small" variant="outlined" onClick={() => setAll('In', '')}>All films In</Button>
-              <TextField
-                select value="" size="small" SelectProps={{ native: true, displayEmpty: true }}
-                onChange={(e) => e.target.value && setAll('Out', e.target.value)}
-                sx={{ flex: '1 1 160px' }}
-              >
-                <option value="">Lend whole set to…</option>
-                {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
-              </TextField>
-            </div>
-            <Tabs value={slotTab} onChange={(e, v) => setSlotTab(v)} variant="scrollable" scrollButtons="auto">
-              {Array.from({ length: slotCount }, (_, i) => (
-                <Tab key={i} label={`Film ${i + 1}`} />
-              ))}
-            </Tabs>
-            {field('Title',    'name',   'text',   `name${t}`)}
-            {sel('Rating',     'rated',  RATINGS,  `rated${t}`)}
-            {field('Length (min)', 'length', 'number', `length${t}`)}
-            {field('Year',     'yearR',  'number', `yearR${t}`)}
-            {sel('Media',      'media',  MEDIA_TYPES, `media${t}`)}
+          {/* Box Set only: ask the user how many films (5–12), used verbatim as the slot count */}
+          {movie.featureMedia === 'Box Set' && (
             <TextField
-              label="Status" select value={ioLabel(movie[`io${t}`])}
-              onChange={(e) => setFilmStatus(t, e.target.value)}
-              fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-            >
-              {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
-            </TextField>
-            {ioLabel(movie[`io${t}`]) === 'Out' &&
-              borrowerSelect('Checked out to', filmWho(t), (v) => { onChange(`who${t}`, v); setWhoErr(false); }, whoErr, `Choose who has film ${t}.`)}
-            <div style={sxStyles.field}>
-              <Typography variant="caption" style={{ display: 'block', marginBottom: 4, color: '#555' }}>
-                Picture for film {t}
-              </Typography>
-              <input
-                key={`film-file-${t}`} type="file" accept="image/*"
-                onChange={(e) => onFilmFile && onFilmFile(t, e.target.files?.[0] || null)}
-              />
-              {movie[`img${t}`] && (
-                <img
-                  src={movie[`img${t}`]} alt="film preview"
-                  style={{ width: 60, height: 90, objectFit: 'cover', marginTop: 6, display: 'block', borderRadius: 4 }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            {sel('Rating', 'rated1', RATINGS)}
-            {field('Length (min)', 'length1', 'number')}
-            {field('Year', 'yearR1', 'number')}
-            {sel('Media', 'media1', MEDIA_TYPES)}
-          </>
-        )}
-
-        <div style={sxStyles.field}>
-          <Typography variant="caption" style={{ display: 'block', marginBottom: 4, color: '#555' }}>
-            {isSet ? 'Set cover image' : 'Poster Image'}
-          </Typography>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFileSelect && onFileSelect(e.target.files?.[0] || null)}
-          />
-          {movie.img_url && (
-            <img
-              src={movie.img_url}
-              alt="poster preview"
-              style={{ width: 60, height: 90, objectFit: 'cover', marginTop: 6, display: 'block', borderRadius: 4 }}
-              onError={(e) => { e.target.style.display = 'none'; }}
+              label={`Films (${BOXSET_MIN}–${BOXSET_MAX})`} type="number"
+              value={movie.numMovie || BOXSET_MIN}
+              inputProps={{ min: BOXSET_MIN, max: BOXSET_MAX }}
+              onChange={(e) => handleBoxSetCountChange(e.target.value)}
+              fullWidth size="small"
             />
           )}
-        </div>
 
-        {!isSet && (
-          <>
-            <TextField
-              label="Status" select value={io}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-            >
-              {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
-            </TextField>
-            {io === 'Out' &&
-              borrowerSelect('Checked out to', whoValue, (v) => { onChange('who', v); setWhoErr(false); }, whoErr, 'Choose who has this movie.')}
-          </>
-        )}
-
-        <TextField
-          label="Lost?" select value={lost}
-          onChange={(e) => onChange('lost', e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}
-        >
-          {['No', 'Yes'].map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-      </DialogContent>
+          {isSet ? (
+            <>
+              {lostField}
+              <Full>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Button size="small" variant="outlined" onClick={() => setAll('In', '')}>All films In</Button>
+                  <TextField
+                    select value="" size="small" SelectProps={{ native: true, displayEmpty: true }}
+                    onChange={(e) => e.target.value && setAll('Out', e.target.value)}
+                    sx={{ flex: '1 1 160px' }}
+                  >
+                    <option value="">Lend whole set to…</option>
+                    {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </TextField>
+                </div>
+              </Full>
+              <Full>
+                <Tabs value={slotTab} onChange={(e, v) => setSlotTab(v)} variant="scrollable" scrollButtons="auto"
+                  sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, py: 0 } }}>
+                  {Array.from({ length: slotCount }, (_, i) => (
+                    <Tab key={i} label={`Film ${i + 1}`} />
+                  ))}
+                </Tabs>
+              </Full>
+              <Full>{field('Title', 'name', 'text', `name${t}`)}</Full>
+              {sel('Rating',     'rated',  RATINGS,  `rated${t}`)}
+              {field('Length (min)', 'length', 'number', `length${t}`)}
+              {field('Year',     'yearR',  'number', `yearR${t}`)}
+              {sel('Media',      'media',  MEDIA_TYPES, `media${t}`)}
+              <TextField
+                label="Status" select value={ioLabel(movie[`io${t}`])}
+                onChange={(e) => setFilmStatus(t, e.target.value)}
+                fullWidth size="small" SelectProps={{ native: true }}
+              >
+                {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
+              </TextField>
+              {ioLabel(movie[`io${t}`]) === 'Out' &&
+                borrowerSelect('Checked out to', filmWho(t), (v) => { onChange(`who${t}`, v); setWhoErr(false); }, whoErr, `Choose who has film ${t}.`)}
+              <Full>
+                <ImagePick
+                  inputKey={`film-file-${t}`} label={`Picture for film ${t}`}
+                  src={movie[`img${t}`]} onFile={(file) => onFilmFile && onFilmFile(t, file)}
+                />
+              </Full>
+              <Full>
+                <ImagePick label="Set cover image" src={movie.img_url} onFile={onFileSelect} />
+              </Full>
+            </>
+          ) : (
+            <>
+              {sel('Media', 'media1', MEDIA_TYPES)}
+              {sel('Rating', 'rated1', RATINGS)}
+              {field('Length (min)', 'length1', 'number')}
+              {field('Year', 'yearR1', 'number')}
+              {lostField}
+              <TextField
+                label="Status" select value={io}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                fullWidth size="small" SelectProps={{ native: true }}
+              >
+                {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
+              </TextField>
+              {io === 'Out' &&
+                borrowerSelect('Checked out to', whoValue, (v) => { onChange('who', v); setWhoErr(false); }, whoErr, 'Choose who has this movie.')}
+              <Full>
+                <ImagePick label="Poster Image" src={movie.img_url} onFile={onFileSelect} />
+              </Full>
+            </>
+          )}
+        </FieldGrid>
+      </FitContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={trySave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
       </DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 
@@ -407,9 +389,9 @@ function FilmsDialog({ movie, onClose, onEditFilm, onDeleteFilm }) {
   if (!movie) return null;
   const slots = collectionSlots(movie);
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <FitDialog open onClose={onClose} maxWidth="md">
       <DialogTitle>{movie.name} — {slots.length} films</DialogTitle>
-      <DialogContent>
+      <FitContent>
         <div style={sxStyles.grid}>
           {slots.map((s) => (
             <Card key={s.slot} elevation={2} sx={{ ...sxStyles.card, maxWidth: 170 }}>
@@ -442,9 +424,9 @@ function FilmsDialog({ movie, onClose, onEditFilm, onDeleteFilm }) {
             </Card>
           ))}
         </div>
-      </DialogContent>
+      </FitContent>
       <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 
@@ -461,54 +443,50 @@ function FilmEditDialog({ film, onClose, onSave, contactNames }) {
     onSave(f, file);
   };
   return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+    <FitDialog open onClose={onClose} maxWidth="xs">
       <DialogTitle>Edit Film {f.slot}</DialogTitle>
-      <DialogContent>
-        <TextField label="Title" value={f.name} onChange={(e) => set('name', e.target.value)}
-          fullWidth size="small" sx={sxStyles.field} />
-        <TextField label="Rating" select value={f.rated} onChange={(e) => set('rated', e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
-          {RATINGS.map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-        <TextField label="Length (min)" type="number" value={f.len} onChange={(e) => set('len', e.target.value)}
-          fullWidth size="small" sx={sxStyles.field} />
-        <TextField label="Year" type="number" value={f.year} onChange={(e) => set('year', e.target.value)}
-          fullWidth size="small" sx={sxStyles.field} />
-        <TextField label="Media" select value={f.media} onChange={(e) => set('media', e.target.value)}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
-          {MEDIA_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-        <TextField label="Status" select value={f.io}
-          onChange={(e) => { setF((x) => ({ ...x, io: e.target.value, who: e.target.value === 'Out' ? '' : 'In Library' })); setWhoErr(false); }}
-          fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
-          {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
-        </TextField>
-        {f.io === 'Out' && (
-          <TextField label="Checked out to" select value={whoValue}
-            onChange={(e) => { set('who', e.target.value); setWhoErr(false); }}
-            error={whoErr} helperText={whoErr ? 'Choose who has this film.' : ''}
-            fullWidth size="small" SelectProps={{ native: true }} sx={sxStyles.field}>
-            <option value="" disabled></option>
-            {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
+      <FitContent>
+        <FieldGrid>
+          <Full>
+            <TextField label="Title" value={f.name} onChange={(e) => set('name', e.target.value)}
+              fullWidth size="small" />
+          </Full>
+          <TextField label="Rating" select value={f.rated} onChange={(e) => set('rated', e.target.value)}
+            fullWidth size="small" SelectProps={{ native: true }}>
+            {RATINGS.map((v) => <option key={v} value={v}>{v}</option>)}
           </TextField>
-        )}
-        <div style={sxStyles.field}>
-          <Typography variant="caption" style={{ display: 'block', marginBottom: 4, color: '#555' }}>
-            Picture
-          </Typography>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          {f.img && (
-            <img src={f.img} alt="film preview"
-              style={{ width: 60, height: 90, objectFit: 'cover', marginTop: 6, display: 'block', borderRadius: 4 }}
-              onError={(e) => { e.target.style.display = 'none'; }} />
+          <TextField label="Length (min)" type="number" value={f.len} onChange={(e) => set('len', e.target.value)}
+            fullWidth size="small" />
+          <TextField label="Year" type="number" value={f.year} onChange={(e) => set('year', e.target.value)}
+            fullWidth size="small" />
+          <TextField label="Media" select value={f.media} onChange={(e) => set('media', e.target.value)}
+            fullWidth size="small" SelectProps={{ native: true }}>
+            {MEDIA_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </TextField>
+          <TextField label="Status" select value={f.io}
+            onChange={(e) => { setF((x) => ({ ...x, io: e.target.value, who: e.target.value === 'Out' ? '' : 'In Library' })); setWhoErr(false); }}
+            fullWidth size="small" SelectProps={{ native: true }}>
+            {['In', 'Out'].map((v) => <option key={v} value={v}>{v}</option>)}
+          </TextField>
+          {f.io === 'Out' && (
+            <TextField label="Checked out to" select value={whoValue}
+              onChange={(e) => { set('who', e.target.value); setWhoErr(false); }}
+              error={whoErr} helperText={whoErr ? 'Choose who has this film.' : ''}
+              fullWidth size="small" SelectProps={{ native: true }}>
+              <option value="" disabled></option>
+              {contactNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </TextField>
           )}
-        </div>
-      </DialogContent>
+          <Full>
+            <ImagePick label="Picture" src={f.img} onFile={setFile} />
+          </Full>
+        </FieldGrid>
+      </FitContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={trySave} sx={sxStyles.saveBtn} variant="contained">Save</Button>
       </DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 

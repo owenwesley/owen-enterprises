@@ -13,6 +13,7 @@ import { useNutrition, NUTRIENT_FIELDS } from '../hooks/useNutrition';
 import { nutritionSlotsFor } from '../components/Tables/nutritionColumns';
 import NutritionTable from '../components/Tables/NutritionTable';
 import { formatDate } from '../../../utils/dateFormat';
+import { FitDialog, FitContent, FieldGrid, Full } from '../../../components/DialogFit';
 
 const sxStyles = {
   root:      { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -32,33 +33,37 @@ function MealDialog({ open, row, slots, onClose, onChange, onSave }) {
   const slot = slots[Math.min(tab, slots.length - 1)];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <FitDialog open={open} onClose={onClose} maxWidth="sm">
       <DialogTitle>Edit Nutrition — {formatDate(row.date)}</DialogTitle>
       <Tabs value={Math.min(tab, slots.length - 1)} onChange={(e, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
         {slots.map((s) => <Tab key={s.key} label={s.label} />)}
       </Tabs>
-      <DialogContent>
-        {NUTRIENT_FIELDS.map((f) => {
-          const field = `${f.key}${slot.key}`;
-          return (
-            <TextField
-              key={field}
-              label={f.label}
-              type={f.type}
-              value={row[field] ?? (f.type === 'number' ? 0 : '')}
-              onChange={(e) => onChange(field, e.target.value)}
-              fullWidth size="small" sx={sxStyles.field}
-            />
-          );
-        })}
-      </DialogContent>
+      <FitContent>
+        <FieldGrid cols={3}>
+          {NUTRIENT_FIELDS.map((f) => {
+            const field = `${f.key}${slot.key}`;
+            const input = (
+              <TextField
+                key={field}
+                label={f.label}
+                type={f.type}
+                value={row[field] ?? (f.type === 'number' ? 0 : '')}
+                onChange={(e) => onChange(field, e.target.value)}
+                fullWidth size="small"
+              />
+            );
+            // The food name is the only text box: give it a whole row.
+            return f.type === 'text' ? <Full key={field}>{input}</Full> : input;
+          })}
+        </FieldGrid>
+      </FitContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={onSave} variant="contained" style={{ backgroundColor: '#1a237e', color: '#fff' }}>
           Save
         </Button>
       </DialogActions>
-    </Dialog>
+    </FitDialog>
   );
 }
 
