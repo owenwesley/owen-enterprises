@@ -298,9 +298,17 @@ router.delete('/account', authMiddleware, async (req, res) => {
     }
 
     await deleteUser(existing.userName, true, () => {});
+    // Minimal record that a self-delete happened: id and time only, no name or health data.
+    console.log(`account deleted: user id ${existing.id} at ${new Date().toISOString()}`);
     return res.json({ message: 'Account deleted' });
   } catch (e) {
     console.error('delete account failed:', e.message);
+    // The Sunday rebuild locks tables; a delete that collides with it times out or
+    // deadlocks. Nothing was changed (one transaction), so say to try again.
+    if (e && (e.code === 'ER_LOCK_WAIT_TIMEOUT' || e.code === 'ER_LOCK_DEADLOCK' ||
+              e.errno === 1205 || e.errno === 1213)) {
+      return res.status(503).json({ error: 'The system is busy with maintenance. Nothing was changed. Please try again in a few minutes.' });
+    }
     return res.status(500).json({ error: 'Could not delete the account. Nothing was changed.' });
   }
 });

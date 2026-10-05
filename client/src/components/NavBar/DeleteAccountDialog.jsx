@@ -28,6 +28,7 @@ export default function DeleteAccountDialog({ open, onClose }) {
   const canDelete = password.length > 0 && word.trim().toUpperCase() === 'DELETE' && !busy;
 
   const submit = async () => {
+    if (!canDelete) return;
     setBusy(true); setError('');
     const data = await deleteFetch('/auth/account', { password });
     setBusy(false);
@@ -35,6 +36,9 @@ export default function DeleteAccountDialog({ open, onClose }) {
     if (data.error) { setError(data.fieldErrors?.password || data.error); return; }
     dispatch({ type: 'RESET' });
   };
+
+  // Enter in either box does the same as the red button, but only when it is enabled.
+  const onEnter = (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } };
 
   return (
     <Dialog open={open} onClose={close} fullWidth maxWidth="xs">
@@ -47,11 +51,13 @@ export default function DeleteAccountDialog({ open, onClose }) {
         </Typography>
         <TextField
           label="Your password" type="password" fullWidth size="small" autoComplete="current-password"
+          autoFocus onKeyDown={onEnter}
           value={password} onChange={(e) => setPassword(e.target.value)}
           error={Boolean(error)} helperText={error} sx={{ mb: 2 }}
         />
         <TextField
           label="Type DELETE to confirm" fullWidth size="small" autoComplete="off"
+          onKeyDown={onEnter}
           value={word} onChange={(e) => setWord(e.target.value)}
         />
       </DialogContent>

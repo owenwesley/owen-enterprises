@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.13** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.14** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -55,7 +55,7 @@ NODE_ENV=production npm start        # http://localhost:4000
 
 Other scripts (project root): `npm start` (plain `node server.js`), `npm run server` (nodemon), `npm run client` (Vite dev server only). In `client/`: `npm run dev` / `npm start` (dev server), `npm run build` (writes `client/build`), `npm run preview` (serve the built app locally).
 
-There is no automated test suite in this repository.
+There is no full automated test suite, but `npm run check` (`tests/prerelease-check.js`) runs a short pre-release check against the running server: sign-up/sign-in, the 90-row weight cap, per-user access, and every Delete-my-account rule. It uses throwaway `testchk_...` users and removes them. It does not run the weekly rebuild.
 
 ---
 
@@ -115,6 +115,8 @@ owenenterprises/                 ← project root = the Node/Express server
 │   ├── communitylibrary/        books, movies, contacts, upload
 │   ├── meetings/                meetings, chairs, memos
 │   └── owenenterprises/         featurePreferences
+├── tests/
+│   └── prerelease-check.js      pre-release check against the running server (npm run check)
 ├── db/
 │   ├── db.js                    the four connection pools
 │   ├── init.js                  creates databases + tables at start-up
@@ -235,6 +237,7 @@ POST  /bgtracker/readings/deleteByYear/:user_id    body: { year: "26" | "2026" }
 - **Charts** (Chart.js 3 via react-chartjs-2). Chart.js sizes its `<canvas>` to its *parent*, so each canvas sits in a dedicated `ChartBox` with nothing else in it; headers and messages go beside it. The frame is a flex column, so the chart takes whatever height is left. The A1C page has three tabs (Colaberated → 120 Days → Quarterly); `/a1cchart` on its own shows Colaberated. Chart pages load their own data, so opening one directly works.
 - **Editing.** Readings edit through a draft (`editDraft`) so keystrokes never touch the list; the other tables edit in place by row. Edit mode is cancelled whenever you change page. Adding a row refetches the list so the new row has its real id and can be edited straight away.
 - **Weights.** kg and lbs are two views of one number; whichever you edit last wins and the other (and BMI, from the height in preferences) is recalculated on save.
+- **Code-splitting (1.11.14).** Only Login, Register and Landing are in the main bundle; every other page is loaded the first time it is visited (`React.lazy` in `components/NavBar/index.jsx`, wrapped in one `Suspense` with a spinner). `vite.config.js` `manualChunks` puts React in `react-vendor` and Chart.js in `charts`, so the charts chunk downloads only when a chart page opens. First load went from one 833 kB chunk to about 481 kB (React 134 kB + app 347 kB). `lazyPage()` reloads the page once if a chunk file has disappeared after a deploy. When adding a page, import it with `lazyPage(() => import(...))`, not a plain `import`.
 - **Build note.** The client is built with Vite 5 (`@vitejs/plugin-react`), still on React 17 and MUI 5. `vite.config.js` holds the dev-server proxy: the URL prefixes the Express server owns (`/auth`, `/bgtracker`, `/communitylibrary`, `/meetings`, `/doctor`, `/admin`, `/patient-doctors`, `/owenenterprises`, `/images`) go to `http://localhost:$PORT` (PORT is read from the root `.env`, default 4000). `/meetings`, `/doctor` and `/admin` are also React Router pages, so a request that accepts `text/html` (a browser navigation or refresh) is answered with `index.html` instead of being proxied. If you add a new server route prefix, add it to `API_PREFIXES` there. Build output stays in `client/build`, so `server.js` is unchanged. Files containing JSX must end in `.jsx` (Vite does not parse JSX in `.js`). There are no `REACT_APP_*` variables; client env vars would be `VITE_*` read via `import.meta.env`.
 
 ---
@@ -312,6 +315,16 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.14** — Code-splitting, small account-menu fixes, and a pre-release check script.
+- **Code-splitting:** see Front-end notes. Main bundle 833 kB to 347 kB (+ 134 kB React); Chart.js (190 kB) loads only on chart pages and the doctor patient page; each page is its own small file loaded on first visit. No new dependency.
+- **Delete my account dialog:** the password box is focused when it opens, and Enter in either box submits (only when the red button is enabled).
+- **Account menu:** more space above Delete my account (a taller row and a larger gap below Log out) so it is harder to hit by mistake on a phone.
+- **Delete route:** writes one log line per self-delete (`account deleted: user id N at <time>`; no name, no health data). If the delete collides with the Sunday rebuild (lock wait timeout or deadlock) it answers 503 "busy with maintenance, nothing was changed, try again in a few minutes" instead of a generic 500.
+- **`tests/prerelease-check.js` (`npm run check`):** 23 checks over HTTP plus read-only database checks; see Quick start.
+- **Verified on MariaDB 10.11 and headless Chromium (production build served by the real server):** `npm run check` 23/23; login, the account menu (desktop and 375 px phone), My profile and a chart page loading their chunks, the charts chunk NOT downloaded on first load, the delete dialog (disabled button, autofocus, wrong password via Enter stays open with the error, right password deletes and lands on /login, the old login fails).
+- **Not tested:** a real phone with the on-screen keyboard; MySQL 8; Windows; a delete during an actual rebuild (the 503 path is code only).
+- No schema change. No file renamed or removed. New files: `tests/prerelease-check.js`.
 
 **1.11.13** — Account menu (upper right), Delete my account, and test accounts last in the weekly renumber.
 - **Account menu:** `components/NavBar/AccountMenu.jsx` replaces the separate My doctors / Profile / Feature access icons and the Logout button with one avatar + first-name button (avatar only on phones). Everyone: My profile, Feature access, Log out. Patients also get My doctors (BG Tracker on), a Switch feature list (only the features they have on) and Delete my account. Doctors get Doctor home and My clinic; admins get Doctor approvals.

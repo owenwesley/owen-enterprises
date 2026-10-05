@@ -117,9 +117,9 @@ export default function AccountMenu({ compact = false }) {
           <ListItemText>Log out</ListItemText>
         </MenuItem>
 
-        {isPatient && <Divider />}
+        {isPatient && <Divider sx={{ mt: 1.5, mb: 1.5 }} />}
         {isPatient && (
-          <MenuItem onClick={() => { close(); setConfirmOpen(true); }} sx={{ color: 'error.main' }}>
+          <MenuItem onClick={() => { close(); setConfirmOpen(true); }} sx={{ color: 'error.main', minHeight: 44 }}>
             <ListItemIcon sx={{ color: 'error.main' }}><DeleteForeverIcon fontSize="small" /></ListItemIcon>
             <ListItemText>Delete my account</ListItemText>
           </MenuItem>

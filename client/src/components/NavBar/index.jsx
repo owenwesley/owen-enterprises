@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Switch, Route, Link, Redirect, useLocation } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -7,6 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import HomeIcon from '@mui/icons-material/Home';
 import Tooltip from '@mui/material/Tooltip';
 import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -24,28 +25,58 @@ import { useChairs } from '../../features/meetings/hooks/useChairs';
 import { useMemos } from '../../features/meetings/hooks/useMemos';
 
 import AccountMenu from './AccountMenu';
+// Login, Register and Landing load with the app; every other page is loaded the
+// first time it is visited (React.lazy), which keeps the first download small.
 import LoginPage from '../../pages/LoginPage';
 import RegisterPage from '../../pages/RegisterPage';
-import FeaturePreferencesPage from '../../pages/FeaturePreferencesPage';
-import ProfilePage from '../../pages/ProfilePage';
-import DoctorHomePage from '../../pages/DoctorHomePage';
-import DoctorClinicPage from '../../pages/DoctorClinicPage';
-import DoctorPatientDetailPage from '../../pages/DoctorPatientDetailPage';
-import AdminDoctorsPage from '../../pages/AdminDoctorsPage';
-import MyDoctorsPage from '../../pages/MyDoctorsPage';
 import Landing from '../../features/Landing';
-import ReadingsPage from '../../features/bgtracker/pages/ReadingsPage';
-import NutritionPage from '../../features/bgtracker/pages/NutritionPage';
-import {
-  BloodPressurePage, WeightPage, MedicationsPage,
-  ChartsPage, PreferencesPage, HelpPage,
-} from '../../features/bgtracker/pages/pages';
-import BooksPage from '../../features/communityLibrary/BooksPage';
-import MoviesPage from '../../features/communityLibrary/MoviesPage';
-import ContactsPage from '../../features/communityLibrary/ContactsPage';
-import MeetingsPage from '../../features/meetings/MeetingsPage';
-import ChairsPage from '../../features/meetings/ChairsPage';
-import MemosPage from '../../features/meetings/MemosPage';
+
+// Wraps React.lazy. After a new deploy the chunk file names change, so a tab that was
+// opened before it asks for a file that no longer exists and the import fails. The
+// first time that happens we reload the page once to pick up the new version; the
+// flag is cleared as soon as any page loads, so it can never loop.
+const RELOAD_FLAG = 'chunk-reload-once';
+function lazyPage(load) {
+  return lazy(() => load().then(
+    (mod) => {
+      try { sessionStorage.removeItem(RELOAD_FLAG); } catch { /* storage unavailable */ }
+      return mod;
+    },
+    (err) => {
+      let already = true;
+      try {
+        already = sessionStorage.getItem(RELOAD_FLAG) === '1';
+        if (!already) sessionStorage.setItem(RELOAD_FLAG, '1');
+      } catch { /* storage unavailable: do not reload, show the error instead */ }
+      if (!already) { window.location.reload(); return new Promise(() => {}); }
+      throw err;
+    }
+  ));
+}
+
+const FeaturePreferencesPage = lazyPage(() => import('../../pages/FeaturePreferencesPage'));
+const ProfilePage = lazyPage(() => import('../../pages/ProfilePage'));
+const DoctorHomePage = lazyPage(() => import('../../pages/DoctorHomePage'));
+const DoctorClinicPage = lazyPage(() => import('../../pages/DoctorClinicPage'));
+const DoctorPatientDetailPage = lazyPage(() => import('../../pages/DoctorPatientDetailPage'));
+const AdminDoctorsPage = lazyPage(() => import('../../pages/AdminDoctorsPage'));
+const MyDoctorsPage = lazyPage(() => import('../../pages/MyDoctorsPage'));
+const ReadingsPage = lazyPage(() => import('../../features/bgtracker/pages/ReadingsPage'));
+const NutritionPage = lazyPage(() => import('../../features/bgtracker/pages/NutritionPage'));
+// pages.jsx exports several named pages; lazy() needs a default export.
+const fromPages = (name) => lazyPage(() => import('../../features/bgtracker/pages/pages').then((m) => ({ default: m[name] })));
+const BloodPressurePage = fromPages('BloodPressurePage');
+const WeightPage = fromPages('WeightPage');
+const MedicationsPage = fromPages('MedicationsPage');
+const ChartsPage = fromPages('ChartsPage');
+const PreferencesPage = fromPages('PreferencesPage');
+const HelpPage = fromPages('HelpPage');
+const BooksPage = lazyPage(() => import('../../features/communityLibrary/BooksPage'));
+const MoviesPage = lazyPage(() => import('../../features/communityLibrary/MoviesPage'));
+const ContactsPage = lazyPage(() => import('../../features/communityLibrary/ContactsPage'));
+const MeetingsPage = lazyPage(() => import('../../features/meetings/MeetingsPage'));
+const ChairsPage = lazyPage(() => import('../../features/meetings/ChairsPage'));
+const MemosPage = lazyPage(() => import('../../features/meetings/MemosPage'));
 
 // ── style tokens (formerly makeStyles) ────────────────────────────────────────
 const sx = {
@@ -298,6 +329,7 @@ export default function NavBar() {
       {user.isLogedIn && <TopBar navItems={navItems} />}
 
       <div className="app-content">
+      <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}><CircularProgress /></Box>}>
       <Switch>
         <Route path="/login" component={LoginPage} />
         <Route path="/register" component={RegisterPage} />
@@ -364,6 +396,7 @@ export default function NavBar() {
 
         <Route><Redirect to="/login" /></Route>
       </Switch>
+      </Suspense>
       </div>
       </div>
     </Router>

@@ -1,11 +1,12 @@
 {
   "name": "bgtracker-server",
-  "version": "1.11.13",
+  "version": "1.11.14",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "server": "nodemon server.js",
     "client": "npm run dev --prefix client",
+    "check": "node tests/prerelease-check.js",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },
   "dependencies": {

@@ -44,6 +44,22 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: { port: 3000, proxy },
     // Keep the old output folder so server.js (client/build) is unchanged.
-    build: { outDir: 'build', emptyOutDir: true },
+    build: {
+      outDir: 'build',
+      emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          // Chart.js is only needed by the chart pages, so keep it in its own
+          // chunk that loads on demand instead of inside the main bundle.
+          manualChunks(id) {
+            if (id.includes('node_modules/chart.js') || id.includes('node_modules/react-chartjs-2')) return 'charts';
+          // React must live in its own chunk, otherwise Rollup folds it into
+          // the charts chunk (react-chartjs-2 uses it) and the main bundle
+          // would then load the charts chunk at start-up.
+            if (/node_modules\/(react|react-dom|scheduler|object-assign|prop-types)\//.test(id)) return 'react-vendor';
+          },
+        },
+      },
+    },
   };
 });
