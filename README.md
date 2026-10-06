@@ -316,8 +316,9 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
-**1.11.15** — Compact edit dialogs and a clearer role label in the account menu.
+**1.11.15** — Compact edit dialogs, a compact Feature Access page, and a clearer role label in the account menu.
 - **Edit dialogs fit the screen:** the Contacts, Books, Movies (add/edit, films window, single film) and Nutrition dialogs now lay their fields out in two columns (three for Nutrition on wider screens) and use smaller margins, so they no longer need scrolling on a phone. Cause of the old height: the fields used `sx={{ marginBottom: 12 }}`, and MUI's `sx` multiplies that by the 8 px spacing unit (96 px per field). Shared helpers are in `client/src/components/DialogFit.jsx` (`FitDialog`, `FitContent`, `FieldGrid`, `Full`, `ImagePick`); use them for any new dialog. A dialog still scrolls inside itself (title and buttons stay in place) only when it is taller than the screen, for example a large Box Set on a phone held sideways. Measured in headless Chromium at 375 x 667: Contact 297 px, Book 345 px (395 with Out), single movie 395 px, Double Feature 592 px, Box Set 642 px, Nutrition 645 px, none scrolling.
+- **Feature Access page fits the screen:** same cause as the dialogs (plain numbers inside `sx` are theme units, so `marginTop: 28` was 224 px and `borderRadius: 16` was 64 px). The card was 1048 px tall on a 375 x 667 phone with its top cut off by the centring; it is now 411 px (388 px on desktop), with sizes written as px strings, tighter padding and `margin: auto` centring that never clips the top. Only a phone held sideways (375 px tall) still scrolls. File: `client/src/pages/FeaturePreferencesPage.jsx`.
 - **Account menu role label:** shows "Member" instead of "Patient" when BG Tracker is off for that user (Library / Meetings only). The stored role is unchanged; this is only the text.
 - No schema change, no server change, no dependency change, nothing renamed or removed. New file: `client/src/components/DialogFit.jsx`.
 
