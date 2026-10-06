@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.16** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.17** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -315,6 +315,12 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.17** — Preferences page: the checkboxes now respond when you tap their label text, and the page fits the screen without scrolling.
+- **Checkbox labels fixed (`client/src/features/bgtracker/components/Preferences/index.jsx`):** every label pointed at an `id` that no checkbox had (and two pointed at names that did not exist: `chkBloodPressure` and `chkSliddingScale`), so tapping words such as "AM Meds" did nothing and only the small box worked. Each checkbox now has an `id` equal to its `name`, rendered through a small `Check` component. Rule: give a checkbox an `id` equal to its label's `htmlFor`.
+- **Compact layout:** small dropdowns (one `Pick` helper), small checkboxes, Take Insulin and Types of Insulin on one row, the sliding-scale dropdowns two across with Carb Ratio (g/unit) beside Sliding Scale 5, smaller tab labels so "Medications & Insulin" stays on one line, `box-sizing: border-box` (the old padding added 48 px on top of `height: 100%`), and content centred with `margin: auto` so a short window never cuts off the top. The helper text under Times Per Day, Height and Types of Insulin and the repeated sliding-scale lines were replaced by one caption; typo "Slliding" fixed.
+- Measured in headless Chromium: both tabs fit without scrolling at 375 x 667, 390 x 844 and 1280 x 800; at 360 x 640 the Medications & Insulin tab scrolls inside by 18 px with everything switched on. Not tested on a real phone.
+- No schema change, no server change, no dependency change, nothing renamed or removed. One file changed besides the version numbers and this README.
 
 **1.11.16** — Refreshing the browser on Meetings, Doctor and Admin pages works on the live server; the pages were audited for the MUI `sx` units problem.
 - **Refresh bug fixed (server.js):** `/meetings`, `/doctor` and `/admin` are both API prefixes and React Router pages. The Vite dev server already sends a browser navigation (`Accept` includes `text/html`) to `index.html`, but the production server did not, so a refresh, bookmark or typed address on `/meetings`, `/doctor`, `/doctor/clinic`, `/doctor/patients/:id` or `/admin` showed the API's JSON `{"error":"No token — please log in"}` instead of the page. `server.js` now has the same rule, only when `NODE_ENV=production`, only for GET requests that ask for `text/html`, and only for those three prefixes. The app's own `fetch()` calls do not send `text/html`, so they still reach the API, and POST/PUT/DELETE are never affected. Nothing is served that was not already public (it is the same `index.html`).

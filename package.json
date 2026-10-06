@@ -1,6 +1,6 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.11.16",
+  "version": "1.11.17",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
