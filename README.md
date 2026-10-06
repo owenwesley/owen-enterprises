@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.15** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.16** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -315,6 +315,12 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.16** — Refreshing the browser on Meetings, Doctor and Admin pages works on the live server; the pages were audited for the MUI `sx` units problem.
+- **Refresh bug fixed (server.js):** `/meetings`, `/doctor` and `/admin` are both API prefixes and React Router pages. The Vite dev server already sends a browser navigation (`Accept` includes `text/html`) to `index.html`, but the production server did not, so a refresh, bookmark or typed address on `/meetings`, `/doctor`, `/doctor/clinic`, `/doctor/patients/:id` or `/admin` showed the API's JSON `{"error":"No token — please log in"}` instead of the page. `server.js` now has the same rule, only when `NODE_ENV=production`, only for GET requests that ask for `text/html`, and only for those three prefixes. The app's own `fetch()` calls do not send `text/html`, so they still reach the API, and POST/PUT/DELETE are never affected. Nothing is served that was not already public (it is the same `index.html`).
+- **`npm run check` extended:** on a server that is serving `client/build` (production) it now also checks that those four paths return the app on a browser refresh and that the same path without `text/html` still reaches the API (28 checks). On the dev server (`npm run dev`) those checks are skipped with an INFO line and the total stays 23. Run against the pre-1.11.16 `server.js` the new checks fail 4 times, so they do detect the bug.
+- **Audit of the remaining pages for the `sx` units problem (found in 1.11.15): nothing to fix.** Login, Register, Profile, My doctors, Doctor home, My clinic, Doctor patient detail, Doctor approvals (Admin), Meetings, Chairs, Memos and Landing were read and then measured in headless Chromium at 375 x 667, 390 x 844 and 1280 x 800. Their style objects either use small theme-unit numbers on purpose (`gap: 1.5`, `borderRadius: 4` = 16 px) or are applied with `style={}`, where plain numbers are pixels. No page overflowed sideways or had its top cut off at any size; Profile scrolls inside its own container on a 667 px phone because the form is taller than the screen, as designed.
+- No schema change, no dependency change, nothing renamed or removed. Server code changed in one place (`server.js`).
 
 **1.11.15** — Compact edit dialogs, a compact Feature Access page, and a clearer role label in the account menu.
 - **Edit dialogs fit the screen:** the Contacts, Books, Movies (add/edit, films window, single film) and Nutrition dialogs now lay their fields out in two columns (three for Nutrition on wider screens) and use smaller margins, so they no longer need scrolling on a phone. Cause of the old height: the fields used `sx={{ marginBottom: 12 }}`, and MUI's `sx` multiplies that by the 8 px spacing unit (96 px per field). Shared helpers are in `client/src/components/DialogFit.jsx` (`FitDialog`, `FitContent`, `FieldGrid`, `Full`, `ImagePick`); use them for any new dialog. A dialog still scrolls inside itself (title and buttons stay in place) only when it is taller than the screen, for example a large Box Set on a phone held sideways. Measured in headless Chromium at 375 x 667: Contact 297 px, Book 345 px (395 with Out), single movie 395 px, Double Feature 592 px, Box Set 642 px, Nutrition 645 px, none scrolling.

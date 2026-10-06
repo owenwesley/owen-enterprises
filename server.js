@@ -40,6 +40,21 @@ if (!process.env.JWT_SECRET) {
 }
 app.use(express.json());
 
+// ── Browser refresh on pages that share a name with an API prefix ────────────
+// /meetings, /doctor and /admin are both API prefixes and React Router pages.
+// A browser navigation (refresh, bookmark, typed address: Accept includes
+// text/html) must get the app's index.html, otherwise the person sees the
+// API's JSON "No token" error instead of the page. fetch() calls from the app
+// do not send text/html, so they still reach the API. This mirrors the
+// `bypass` rule in client/vite.config.js, which does the same in development.
+if (process.env.NODE_ENV === 'production') {
+  app.use(['/meetings', '/doctor', '/admin'], (req, res, next) => {
+    const wantsPage = req.method === 'GET' && (req.headers.accept || '').includes('text/html');
+    if (!wantsPage) return next();
+    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
+  });
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 app.use('/auth', require('./routes/auth'));
 

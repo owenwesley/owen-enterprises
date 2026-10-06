@@ -13,6 +13,8 @@
  *      (npm run check does the same). Another address:  BASE_URL=http://localhost:4001
  *
  * What it checks
+ *   - (production server only) a browser refresh on /meetings, /doctor and /admin
+ *     gets the app, not the API's JSON error; skipped on the dev server
  *   - sign-up and sign-in, wrong password refused
  *   - weights: 95 adds keep only the newest 90 (the cap), oldest 5 gone
  *   - one patient cannot read another patient's weights (403), no token (401)
@@ -96,6 +98,21 @@ async function main() {
   try { probe = await api('POST', '/auth/signin', { body: {} }); }
   catch (e) { console.log(`  FAIL  cannot reach ${BASE} (${e.message}). Is the server running?`); process.exit(1); }
   check('server answers; empty sign-in is refused with 400', probe.status === 400, `status ${probe.status}`);
+
+  section('Browser refresh on pages that share a name with an API prefix');
+  const pageHeaders = { Accept: 'text/html,application/xhtml+xml' };
+  const home = await fetch(BASE + '/', { headers: pageHeaders }).then(async (r) => ({ type: r.headers.get('content-type') || '', text: await r.text() })).catch(() => null);
+  if (home && /text\/html/.test(home.type) && /id="root"/.test(home.text)) {
+    for (const p of ['/meetings', '/doctor', '/doctor/clinic', '/admin']) {
+      const r = await fetch(BASE + p, { headers: pageHeaders });
+      const t = await r.text();
+      check(`browser refresh on ${p} gets the app, not API JSON`, r.status === 200 && /id="root"/.test(t), `status ${r.status}, starts ${JSON.stringify(t.slice(0, 40))}`);
+    }
+    const apiCall = await api('GET', '/meetings/1');
+    check('the same path without text/html still reaches the API (401 without a token)', apiCall.status === 401, `status ${apiCall.status}`);
+  } else {
+    info('skipped: this server is not serving client/build (normal for npm run dev). To run these checks: build the client, then NODE_ENV=production npm start.');
+  }
 
   section('Sign-up and sign-in');
   const A = await makePatient(names.a);
