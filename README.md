@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.17** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.18** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -315,6 +315,11 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.18** — Preferences page: Edit and Save no longer run off the bottom of the screen.
+- **Edit and Save pinned (`client/src/features/bgtracker/components/Preferences/index.jsx`):** the buttons used to sit at the end of the form, so on a window shorter than the Medications & Insulin tab (a typical 1366 x 768 laptop, or a small phone) they were half cut off. They now sit in a footer that never scrolls, and only the form above them scrolls when it is taller than the window.
+- Measured in headless Chromium inside the real app shell (`.app-shell` / `.app-content`, 64 px top bar on desktop, 52 px on phones) at 1280 x 800, 1366 x 657, 1366 x 600, 1366 x 500, 375 x 667, 360 x 640 and 390 x 844: both buttons were fully on screen in every case on both tabs. Confirmed on the owner's laptop; not yet checked on a real phone.
+- No schema change, no server change, no dependency change, nothing renamed or removed. One file changed besides the version numbers and this README.
 
 **1.11.17** — Preferences page: the checkboxes now respond when you tap their label text, and the page fits the screen without scrolling.
 - **Checkbox labels fixed (`client/src/features/bgtracker/components/Preferences/index.jsx`):** every label pointed at an `id` that no checkbox had (and two pointed at names that did not exist: `chkBloodPressure` and `chkSliddingScale`), so tapping words such as "AM Meds" did nothing and only the small box worked. Each checkbox now has an `id` equal to its `name`, rendered through a small `Check` component. Rule: give a checkbox an `id` equal to its label's `htmlFor`.

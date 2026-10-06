@@ -91,138 +91,138 @@ export default function Preferences(props) {
         flexDirection: 'column',
         padding: '12px 16px 4px',
       }}>
-        <div style={{ width: '100%', maxWidth: 480, margin: 'auto' }}>
+      <div style={{ width: '100%', maxWidth: 480, margin: 'auto' }}>
 
-          {(props.timesPD === 1 && props.chkBP) || (props.timesPD === 2 && props.chkBP) ? (
-            <h3 style={{ color: 'black', margin: '0 0 8px' }}>Blood Pressure Tracking</h3>
-          ) : (props.timesPD === 1 && !props.chkBP) || (props.timesPD === 2 && !props.chkBP) ? (
-            <h3 style={{ color: 'black', margin: '0 0 8px' }}>Blood Sugar Tracking</h3>
-          ) : (
-            <h3 style={{ color: 'black', margin: '0 0 8px' }}>Tracking Options</h3>
-          )}
+        {(props.timesPD === 1 && props.chkBP) || (props.timesPD === 2 && props.chkBP) ? (
+          <h3 style={{ color: 'black', margin: '0 0 8px' }}>Blood Pressure Tracking</h3>
+        ) : (props.timesPD === 1 && !props.chkBP) || (props.timesPD === 2 && !props.chkBP) ? (
+          <h3 style={{ color: 'black', margin: '0 0 8px' }}>Blood Sugar Tracking</h3>
+        ) : (
+          <h3 style={{ color: 'black', margin: '0 0 8px' }}>Tracking Options</h3>
+        )}
 
-          {!isBPOnlyMode && (
-            <Tabs
-              value={tab}
-              onChange={(e, v) => setTab(v)}
-              variant='fullWidth'
-              sx={{ minHeight: '36px', marginBottom: '8px' }}
-            >
-              <Tab sx={tabSx} label='Tracking Setup' />
-              <Tab sx={tabSx} label='Medications & Insulin' />
-            </Tabs>
-          )}
+        {!isBPOnlyMode && (
+          <Tabs
+            value={tab}
+            onChange={(e, v) => setTab(v)}
+            variant='fullWidth'
+            sx={{ minHeight: '36px', marginBottom: '8px' }}
+          >
+            <Tab sx={tabSx} label='Tracking Setup' />
+            <Tab sx={tabSx} label='Medications & Insulin' />
+          </Tabs>
+        )}
 
-          <Pick name='timesPD' label='Times Per Day' value={props.timesPD} options={timesPD} onChange={change} />
+        <Pick name='timesPD' label='Times Per Day' value={props.timesPD} options={timesPD} onChange={change} />
 
-          {isBPOnlyMode ? (
-            <div>
-              <Check name='chkBP' checked={props.chkBP} onChange={change}>Blood Pressure</Check>
-            </div>
-          ) : (
-            <>
-              {tab === 0 && (
+        {isBPOnlyMode ? (
+          <div>
+            <Check name='chkBP' checked={props.chkBP} onChange={change}>Blood Pressure</Check>
+          </div>
+        ) : (
+          <>
+            {tab === 0 && (
+              <div>
                 <div>
-                  <div>
-                    <Check name='chkNutrition' checked={props.chkNutrition} onChange={change}>Count Carbs</Check>
+                  <Check name='chkNutrition' checked={props.chkNutrition} onChange={change}>Count Carbs</Check>
+                </div>
+
+                {props.chkNutrition ? (
+                  <div style={{ margin: '4px 0 8px' }}>
+                    <TextField
+                      name='calorieGoal'
+                      type='number'
+                      size='small'
+                      label='Daily Calorie Goal'
+                      value={props.calorieGoal || ''}
+                      onChange={change}
+                      inputProps={{ min: 0, max: 20000, step: 50, inputMode: 'numeric' }}
+                      helperText='Shows what is left in the Nutrition Day Total and colors each day. Leave blank for no goal.'
+                      fullWidth
+                    />
                   </div>
+                ) : ''}
 
-                  {props.chkNutrition ? (
-                    <div style={{ margin: '4px 0 8px' }}>
-                      <TextField
-                        name='calorieGoal'
-                        type='number'
-                        size='small'
-                        label='Daily Calorie Goal'
-                        value={props.calorieGoal || ''}
-                        onChange={change}
-                        inputProps={{ min: 0, max: 20000, step: 50, inputMode: 'numeric' }}
-                        helperText='Shows what is left in the Nutrition Day Total and colors each day. Leave blank for no goal.'
-                        fullWidth
-                      />
-                    </div>
-                  ) : ''}
+                {props.chkNutrition ? (
+                  <div>
+                    <Check name='chkWeight' checked={props.chkWeight} onChange={change}>Track Weight</Check>
+                  </div>
+                ) : ''}
 
-                  {props.chkNutrition ? (
-                    <div>
-                      <Check name='chkWeight' checked={props.chkWeight} onChange={change}>Track Weight</Check>
-                    </div>
-                  ) : ''}
+                {props.chkWeight ? (
+                  <div style={{ margin: '4px 0 8px' }}>
+                    <Pick name='height' label='Height in Inches' value={props.height} options={height} onChange={change} />
+                  </div>
+                ) : ''}
 
-                  {props.chkWeight ? (
-                    <div style={{ margin: '4px 0 8px' }}>
-                      <Pick name='height' label='Height in Inches' value={props.height} options={height} onChange={change} />
-                    </div>
-                  ) : ''}
+                {props.height !== '0' ? (
+                  <div>
+                    <Check name='chkMeds' checked={props.chkMeds} onChange={change}>Take Meds</Check>
+                  </div>
+                ) : ''}
+              </div>
+            )}
 
-                  {props.height !== '0' ? (
-                    <div>
-                      <Check name='chkMeds' checked={props.chkMeds} onChange={change}>Take Meds</Check>
-                    </div>
-                  ) : ''}
-                </div>
-              )}
+            {tab === 1 && (
+              <div>
+                {props.chkMeds ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                    <Check name='chkMedsB' checked={props.chkMedsB} onChange={change}>AM Meds</Check>
+                    <Check name='chkMedsL' checked={props.chkMedsL} onChange={change}>Noon Meds</Check>
+                    <Check name='chkMedsD' checked={props.chkMedsD} onChange={change}>Evening Meds</Check>
+                    <Check name='chkMedsBed' checked={props.chkMedsBed} onChange={change}>Bed Meds</Check>
+                  </div>
+                ) : ''}
 
-              {tab === 1 && (
-                <div>
-                  {props.chkMeds ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-                      <Check name='chkMedsB' checked={props.chkMedsB} onChange={change}>AM Meds</Check>
-                      <Check name='chkMedsL' checked={props.chkMedsL} onChange={change}>Noon Meds</Check>
-                      <Check name='chkMedsD' checked={props.chkMedsD} onChange={change}>Evening Meds</Check>
-                      <Check name='chkMedsBed' checked={props.chkMedsBed} onChange={change}>Bed Meds</Check>
-                    </div>
-                  ) : ''}
-
-                  {props.chkMeds ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
-                      <Check name='chkInsulin' checked={props.chkInsulin} onChange={change}>Take Insulin</Check>
-                      {props.chkInsulin ? (
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <Pick name='typInsulin' label='Types of Insulin' value={props.typInsulin} options={typInsulin} onChange={change} />
-                        </div>
-                      ) : ''}
-                    </div>
-                  ) : ''}
-
-                  {props.typInsulin === 1 || props.typInsulin === 2 ? (
-                    <div>
-                      <Check name='chkBP' checked={props.chkBP} onChange={change}>Blood Pressure (2X max)</Check>
-                    </div>
-                  ) : ''}
-
-                  {props.chkBP ? (
-                    <div>
-                      <Check name='chkSlidingScale' checked={props.chkSlidingScale} onChange={change}>Sliding Scale</Check>
-                    </div>
-                  ) : ''}
-
-                  {props.chkSlidingScale ? (
-                    <div>
-                      <div style={{ color: 'black', fontSize: '0.8rem', margin: '4px 0' }}>
-                        Pick the sugar level where each sliding scale step starts.
+                {props.chkMeds ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                    <Check name='chkInsulin' checked={props.chkInsulin} onChange={change}>Take Insulin</Check>
+                    {props.chkInsulin ? (
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Pick name='typInsulin' label='Types of Insulin' value={props.typInsulin} options={typInsulin} onChange={change} />
                       </div>
-                      <div style={gridStyle}>
-                        <div style={{ gridColumn: '1 / span 2' }}>
-                          <Pick name='slidingScale1' label='Starting Sliding Scale' value={props.slidingScale1} options={slidingScale1} onChange={change} />
-                        </div>
-                        <Pick name='slidingScale2a' label='Sliding Scale' value={props.slidingScale2a} options={slidingScale2a} onChange={change} />
-                        <Pick name='slidingScale2b' label='Sliding Scale' value={props.slidingScale2b} options={slidingScale2b} onChange={change} />
-                        <Pick name='slidingScale3a' label='Sliding Scale' value={props.slidingScale3a} options={slidingScale3a} onChange={change} />
-                        <Pick name='slidingScale3b' label='Sliding Scale' value={props.slidingScale3b} options={slidingScale3b} onChange={change} />
-                        <Pick name='slidingScale4a' label='Sliding Scale' value={props.slidingScale4a} options={slidingScale4a} onChange={change} />
-                        <Pick name='slidingScale4b' label='Sliding Scale' value={props.slidingScale4b} options={slidingScale4b} onChange={change} />
-                        <Pick name='slidingScale5' label='Sliding Scale' value={props.slidingScale5} options={slidingScale5} onChange={change} />
-                        <Pick name='carbRatio' label='Carb Ratio (g/unit)' value={props.carbRatio} options={carbRatio} onChange={change} />
-                      </div>
-                    </div>
-                  ) : ''}
-                </div>
-              )}
-            </>
-          )}
+                    ) : ''}
+                  </div>
+                ) : ''}
 
-        </div>
+                {props.typInsulin === 1 || props.typInsulin === 2 ? (
+                  <div>
+                    <Check name='chkBP' checked={props.chkBP} onChange={change}>Blood Pressure (2X max)</Check>
+                  </div>
+                ) : ''}
+
+                {props.chkBP ? (
+                  <div>
+                    <Check name='chkSlidingScale' checked={props.chkSlidingScale} onChange={change}>Sliding Scale</Check>
+                  </div>
+                ) : ''}
+
+                {props.chkSlidingScale ? (
+                  <div>
+                    <div style={{ color: 'black', fontSize: '0.8rem', margin: '4px 0' }}>
+                      Pick the sugar level where each sliding scale step starts.
+                    </div>
+                    <div style={gridStyle}>
+                      <div style={{ gridColumn: '1 / span 2' }}>
+                        <Pick name='slidingScale1' label='Starting Sliding Scale' value={props.slidingScale1} options={slidingScale1} onChange={change} />
+                      </div>
+                      <Pick name='slidingScale2a' label='Sliding Scale' value={props.slidingScale2a} options={slidingScale2a} onChange={change} />
+                      <Pick name='slidingScale2b' label='Sliding Scale' value={props.slidingScale2b} options={slidingScale2b} onChange={change} />
+                      <Pick name='slidingScale3a' label='Sliding Scale' value={props.slidingScale3a} options={slidingScale3a} onChange={change} />
+                      <Pick name='slidingScale3b' label='Sliding Scale' value={props.slidingScale3b} options={slidingScale3b} onChange={change} />
+                      <Pick name='slidingScale4a' label='Sliding Scale' value={props.slidingScale4a} options={slidingScale4a} onChange={change} />
+                      <Pick name='slidingScale4b' label='Sliding Scale' value={props.slidingScale4b} options={slidingScale4b} onChange={change} />
+                      <Pick name='slidingScale5' label='Sliding Scale' value={props.slidingScale5} options={slidingScale5} onChange={change} />
+                      <Pick name='carbRatio' label='Carb Ratio (g/unit)' value={props.carbRatio} options={carbRatio} onChange={change} />
+                    </div>
+                  </div>
+                ) : ''}
+              </div>
+            )}
+          </>
+        )}
+
+      </div>
       </div>
 
       <div style={{ flex: '0 0 auto', padding: '8px 16px 12px', borderTop: '1px solid #e0e0e0' }}>
