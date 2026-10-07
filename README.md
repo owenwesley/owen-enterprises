@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.18** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.20** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -29,8 +29,9 @@ BGTracker was last released standalone as 1.3.27; Community Library and Meetings
 10. [Doctor accounts](#doctor-accounts)
 11. [Patient ↔ doctor linking](#patient--doctor-linking)
 12. [Clinics](#clinics)
-13. [Known limitations](#known-limitations)
-14. [Version history](#version-history)
+13. [Church module](#church-module)
+14. [Known limitations](#known-limitations)
+15. [Version history](#version-history)
 
 ---
 
@@ -82,6 +83,7 @@ JWT_SECRET=a-long-random-string
 | `DB_BGTRACKER` | `bgtracker` | |
 | `DB_COMMUNITYLIBRARY` | `communitylibrary` | |
 | `DB_MEETINGS` | `meetings` | |
+| `DB_CHURCH` | `church` | Church module: `churches` and `members`. A **fifth** database; created automatically |
 | `MAINTENANCE_REBUILD_ENABLED` | *unset (off)* | Set `true` to run the weekly table rebuild **and id renumbering** (1..N, no gaps) — see the 1.10.4 entry in *Version history* |
 | `MAINTENANCE_TZ` | `America/Los_Angeles` | Time zone the Sunday 12-4 AM window is measured in |
 | `JWT_SECRET` | *insecure built-in fallback* | **Always set your own.** Tokens last 8 hours |
@@ -303,6 +305,78 @@ That `NULL`-on-delete is enforced two ways, deliberately not just one: `doctor_p
 
 ---
 
+## Church module
+
+Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A church is a **group that users belong to**, not a separate kind of account. It is **off by default**: a person turns it on in Feature Access (`feature_preferences.chkChurch`, default 0). Doctor and admin accounts do not see it.
+
+**What step 1 does:** a user requests a church (it starts *pending*; an admin approves it with a script) and becomes its owner. Other users join with the church's 8-character join code and wait for the owner to approve them. The owner approves or declines people, removes members and edits the mission statement. Members see the member list (display names only) and the mission statement. Nothing else is shared: joining a church exposes no one's library, health data or contact details.
+
+**Not in step 1 (planned, not built):** the library link (sharing books and movies, a church catalog, linked contacts), prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), ownership hand-over, a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
+
+**Database `church`** (env `DB_CHURCH`, default `church`; the fifth database). `dbNames()` in `db/init.js` includes it, which is what makes `idRefs.js`, `rebuildTable.js`, `cleanOrphans.js` and `deleteUser.js` look inside it. Tables are named for what they hold:
+- `churches`: `id`, `name`, `missionStatement`, `joinCode` (8 characters, unique), `status` (`pending` / `approved` / `rejected` / `suspended`), `createdAt`.
+- `members`: `id`, `church_id` (a real foreign key to `churches(id)`, `ON DELETE CASCADE`), `user_id` (a plain number, because a foreign key cannot cross databases; users live in `owenenterprises`), `role` (`owner` / `member`), `status` (`pending` / `active` / `removed`), `createdAt`, `UNIQUE (church_id, user_id)`.
+- Every person column in any future church table must be named `user_id` so the renumbering and delete tools find it by name. Table definitions are identical in `db/init.js` and `db/db.js`.
+
+**API** (`routes/church.js`, mounted at `/church` behind `auth` + `ownerOnly`; every path ends with the signed-in user's id):
+
+| Method and path | Needs |
+|---|---|
+| `GET /church/mine/:user_id` | my churches (join code shown to the owner of a working church only) |
+| `POST /church/create/:user_id` `{ name, missionStatement }` | one church waiting for approval at a time (409 otherwise) |
+| `POST /church/join/:user_id` `{ joinCode }` | unknown code and not-approved church both answer 404 |
+| `GET /church/:church_id/members/:user_id` | `members.view` (owner also sees waiting people) |
+| `POST /church/:church_id/members/approve/:user_id` `{ memberId }` | `members.manage` |
+| `POST /church/:church_id/members/remove/:user_id` `{ memberId }` | `members.manage` (never the owner) |
+| `POST /church/:church_id/edit/:user_id` `{ missionStatement }` | `church.edit` |
+| `POST /church/:church_id/leave/:user_id` | any member, including a pending one (the owner cannot leave) |
+
+**Roles are permissions.** `middleware/church.js` maps each role to fixed permissions (`church.view`, `church.edit`, `members.view`, `members.manage`); routes ask for a permission, never a role name. Access needs an **active** membership in an **approved** church, read from the database on every request. Everything else (not a member, pending, removed, church pending / rejected / suspended, church does not exist, bad id) gets the same 403.
+
+**Admin approval is a script, not a web page:** `node db/approveChurch.js --list` and `node db/approveChurch.js <id> approve | reject | suspend | pending | delete`. Rejecting or suspending marks every non-owner member *removed*, so a later re-approval does not quietly bring everyone back. Deleting a church removes its member rows.
+
+**Deleting accounts:** the owner of a church cannot delete their account (`DELETE /auth/account` answers 409 with a clear message; `deleteUser.js` refuses too) until the church is deleted with `approveChurch.js <id> delete`. A plain member can delete their account; their membership rows go with it.
+
+**Front end:** `client/src/features/church/ChurchPage.jsx` (Overview and Members tabs, a church picker when someone is in more than one) and `hooks/useChurch.js`. The page path is **`/my-church`** (the API prefix `/church` is separate, like `/my-doctors` and `/patient-doctors`), so no browser-refresh special case is needed. `/church` is in `API_PREFIXES` in `client/vite.config.js`. Switch, Landing card, account-menu entry and nav link all follow `chkChurch`.
+
+**Tests:** `npm run check:church` (`tests/church-role-matrix.js`, 72 checks) talks to the running server and creates throwaway `testchu_<time>_a..e` users and churches, removing them at the end. Run it against test data. It does not run the weekly rebuild.
+
+**Verified in the sandbox (MariaDB 10.11, Node 22):** an empty `church` database is filled by the server on start; `npm run check:church` 72 passed; `npm run check` 28 passed on a production-mode server (23 on a dev server); the weekly rebuild (`scheduleRebuild.js --now`) with church rows present renumbered `churches.id`, `members.id` and, through the users renumber, `members.user_id`, with `members.church_id` following and the cascade rule and unique key preserved; an upgrade that lacked `chkChurch` gained the column on start. **Not verified:** the Church page in a real browser or on a phone; MySQL 8; Windows.
+
+**Known edges:** a user can have only one church waiting for approval; no ownership hand-over; a removed person may ask to join again (the owner can decline again); the join code cannot be changed or revoked yet (delete and re-request, or ask for a code-reset feature); no rate limit on join attempts (the code is 8 characters from a 32-character alphabet); church names are not unique. Lawyer review (step E1) should cover church data, and prayers explicitly, before real congregations use it.
+
+---
+
+## HIPAA gate, two-step sign-in (text message) and HTTPS
+
+Everything here is **off until you set it in `.env`**, so installing the release changes nothing by itself.
+
+**What it does**
+- `HIPAA_GATE=on` — BGTracker data (a person's own, and a doctor's view of a patient) needs, in order: BGTracker switched on in Feature Access (`feature_preferences.chkBgtracker`; no row means off), two-step sign-in set up, the consent forms in `config/hipaaForms.js` accepted. Every access is written to `audit_log` *before* the data is served; if that write fails the request fails. Nothing is logged for people with BGTracker off. The client sends people to `/consent` (`client/src/pages/ConsentPage.jsx`) when the server answers `MFA_REQUIRED` or `HIPAA_CONSENT_REQUIRED`; `BGTRACKER_DISABLED` on `/bgtracker` is ignored quietly because readings are requested at login for everyone.
+- **Two-step sign-in by text message** (US and Canada numbers) through **Twilio Verify**, with 8 one-time recovery codes. Account menu > Two-step sign-in. Phone numbers are stored encrypted (`user_mfa.phoneEnc`).
+- **Remember this device for 30 days** (tick box on the code step). Only a hash of a random token is kept (`mfa_trusted_devices`); the password is always still required. Forgotten when two-step is turned off, the phone is changed, or "Forget remembered devices" is pressed.
+- People who enrolled with an authenticator app before 1.11.20 can still sign in with its code until they use "Switch to text messages".
+- `FORCE_HTTPS=on` — refuses plain HTTP (except `http://localhost`) and sends HSTS. Only use behind something that provides HTTPS and sets `X-Forwarded-Proto`. It does not create a certificate.
+
+**`.env` settings**
+
+| Setting | Meaning |
+|---|---|
+| `HIPAA_GATE=on` | turn the gate on |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Twilio console > Account info |
+| `TWILIO_VERIFY_SERVICE_SID` | Twilio console > Verify > Services > create one (starts `VA`) |
+| `MFA_KEY` | long random string; encrypts phone numbers and old authenticator secrets. Set once and keep it |
+| `FORCE_HTTPS=on` | see above |
+| `MFA_SMS_PROVIDER=mock` | **tests only**: no text is sent and the code is always 123456. Never on a real site |
+
+In the Twilio console allow only the **United States and Canada** (Verify service settings and Messaging > Geo permissions) so codes cannot be requested to other countries. Twilio's price page (checked 2026-10) lists $0.05 per successful verification plus about $0.0083 per US text; Canadian text prices were not checked. A text is billed even if never delivered or entered, which is why texts are limited to 5 per person per 15 minutes and why remembering a device matters.
+
+**Tests** (start the server for them as shown)
+- `npm run check:twilio` — no server needed; checks the Twilio request code against a local fake.
+- `npm run check:mfa` — server started with `MFA_SMS_PROVIDER=mock`.
+- `npm run check:hipaa` — server started with `HIPAA_GATE=on MFA_SMS_PROVIDER=mock`.
+- With the gate on, `npm run check` fails its BGTracker steps because its throwaway users have no flag, two-step sign-in or consent; run it with the gate off.
+
 ## Known limitations
 
 Please read these before putting real users' data on it.
@@ -315,6 +389,23 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.20** — HIPAA gate, audit log, two-step sign-in by text message (Twilio), consent screen, HTTPS option; med-tick deduction fix.
+- **Gate:** `middleware/hipaaGate.js` on `/bgtracker` and the doctor patient-data routes (see *HIPAA gate*). New tables in `owenenterprises`: `hipaa_consents`, `audit_log`, `user_mfa`, `mfa_recovery_codes`, `mfa_trusted_devices`. Off unless `HIPAA_GATE=on`.
+- **Two-step sign-in:** `routes/mfa.js` (`/auth/mfa`), `utils/smsVerify.js` (Twilio Verify, plain `fetch`), `utils/mfaDevices.js`, `utils/totp.js` (only for pre-1.11.20 authenticator enrolments). `/auth/signin` returns `{mfaRequired, mfaToken, mfaMethod, phoneHint}` instead of a session token when two-step is on and the device is not remembered.
+- **Client:** code step on the login page, `pages/SecurityPage.jsx`, `pages/ConsentPage.jsx` (`/security`, `/consent`), global handling of the gate's 403 codes in `utils/api.js`.
+- **Forms:** `config/hipaaForms.js`, version 2 (text-message wording, mentions Twilio). The privacy contact email is still a placeholder.
+- **HTTPS:** `middleware/forceHttps.js`.
+- **Fix:** ticking a Meds box on the Readings page deducted nothing unless the Medications page had been opened first; the list is now read from the server when saving (`useReadings.js`).
+- **Admin helper:** `node db/mfaCheck.js <userName>` (diagnostics for the older authenticator-app method).
+
+**1.11.19** — Church module, step 1: request a church, join with a code, owner approves members, mission statement.
+- **New fifth database `church`** (`DB_CHURCH`, default `church`) with `churches` and `members` (see *Church module*). Added to `dbNames()` so renumbering, orphan checks and account deletion cover it.
+- **Off by default:** new column `feature_preferences.chkChurch` (default 0), added to existing databases at start-up by `schemaSync`. The Feature Access route only changes `chkChurch` when the request carries it, so an older page saving without it cannot switch Church off.
+- **Server:** `routes/church.js` (`/church`), `middleware/church.js` (role to permission map), `db/sql/church/`, `db/approveChurch.js` (admin script), a guard in `db/maintenance/deleteUser.js` and `DELETE /auth/account` so a church owner cannot be deleted before the church.
+- **Client:** `features/church/` (page and hook), a Church card on Landing, a switch on Feature Access, an account-menu entry and a nav link. Page path `/my-church`; `/church` added to `API_PREFIXES`.
+- **Tests:** `tests/church-role-matrix.js` (`npm run check:church`, 72 checks). The existing `npm run check` is unchanged (28 production, 23 dev).
+- Camera-vitals / Quick BP work is not part of this release (it remains on hold). No other table changed.
 
 **1.11.18** — Preferences page: Edit and Save no longer run off the bottom of the screen.
 - **Edit and Save pinned (`client/src/features/bgtracker/components/Preferences/index.jsx`):** the buttons used to sit at the end of the form, so on a window shorter than the Medications & Insulin tab (a typical 1366 x 768 laptop, or a small phone) they were half cut off. They now sit in a footer that never scrolls, and only the form above them scrolls when it is taller than the window.

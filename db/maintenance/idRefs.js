@@ -2,7 +2,7 @@
  * db/maintenance/idRefs.js
  *
  * Shared helpers for cleanOrphans.js and deleteUser.js: find every column, in
- * every one of the four databases, that stores a `users` or `clinics` id as a
+ * every one of the five databases, that stores a `users` or `clinics` id as a
  * plain number.
  *
  * This is the same list rebuildTable.js uses (its ID_REFERENCES constant). If a

@@ -20,9 +20,9 @@ router.get('/:user_id', async (req, res) => {
     }
 
     // First-time user — create a row with all features enabled
-    await owenenterprises.promise().query(upsertFeaturePreference, [user_id, 1, 1, 1]);
+    await owenenterprises.promise().query(upsertFeaturePreference, [user_id, 1, 1, 1, 0]);
     return res.json({
-      results: { user_id, chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1 },
+      results: { user_id, chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1, chkChurch: 0 },
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -30,12 +30,21 @@ router.get('/:user_id', async (req, res) => {
 });
 
 // POST /owenenterprises/features/edit/:user_id
+// chkChurch is only changed when the request carries it: a client that saves
+// without it (an older page still open in a browser) must not switch Church off.
 router.post('/edit/:user_id', async (req, res) => {
-  const { chkBgtracker = 1, chkCommunityLibrary = 1, chkMeetings = 1 } = req.body;
+  const { chkBgtracker = 1, chkCommunityLibrary = 1, chkMeetings = 1, chkChurch } = req.body;
   try {
+    let church;
+    if (chkChurch === undefined) {
+      const [rows] = await owenenterprises.promise().query(selectFeaturePreference, [req.params.user_id]);
+      church = rows && rows[0] ? toBit(rows[0].chkChurch) : 0;
+    } else {
+      church = toBit(chkChurch);
+    }
     await owenenterprises.promise().query(
       upsertFeaturePreference,
-      [req.params.user_id, toBit(chkBgtracker), toBit(chkCommunityLibrary), toBit(chkMeetings)]
+      [req.params.user_id, toBit(chkBgtracker), toBit(chkCommunityLibrary), toBit(chkMeetings), church]
     );
     return res.json({ message: 'Feature preferences updated' });
   } catch (err) {

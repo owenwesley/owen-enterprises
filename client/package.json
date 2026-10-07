@@ -1,6 +1,6 @@
 {
   "name": "owenenterprises",
-  "version": "1.11.18",
+  "version": "1.11.20",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -23,6 +23,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^8.3.3"
+    "vite": "^5.4.11"
   }
 }

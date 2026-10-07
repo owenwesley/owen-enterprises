@@ -91,7 +91,7 @@ function makePool() {
   }).promise();
 }
 
-/** Every base table with an `id` column across the four databases. */
+/** Every base table with an `id` column across the five databases. */
 async function discoverTables(pool) {
   const schemas = Object.values(dbNames());
   const [rows] = await pool.query(

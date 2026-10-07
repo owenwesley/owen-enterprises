@@ -98,6 +98,12 @@ const FEATURES = [
     label:   'Meetings',
     desc:    'NA / AA meeting records, chips, medallions and running balance',
   },
+  {
+    key:     'chkChurch',
+    icon:    '⛪',
+    label:   'Church',
+    desc:    'Join your church, see its members and mission statement',
+  },
 ];
 
 export default function FeaturePreferencesPage() {

@@ -1,7 +1,7 @@
 /**
  * db/maintenance/deleteUser.js
  *
- * Deletes a user AND every row that belongs to them, across all four
+ * Deletes a user AND every row that belongs to them, across all five
  * databases. The app has no delete-account feature, and deleting a `users` row
  * by hand leaves their rows behind in bgtracker / meetings / communitylibrary
  * (no foreign keys there), which later makes rebuildTable.js refuse to
@@ -36,6 +36,26 @@ async function main(userName, apply, log = console.log) {
     if (u.role === 'admin') {
       const [[a]] = await conn.query(`SELECT COUNT(*) AS n FROM ${qt(gateway, 'users')} WHERE role='admin' AND id <> ?`, [u.id]);
       if (Number(a.n) === 0) throw new Error('refusing to delete the last admin account');
+    }
+
+
+    // A church needs its owner. Refuse to delete the owner of a church until the
+    // church is deleted (node db/approveChurch.js <id> delete). Members who are
+    // not owners are removed with the other rows below (church.members.user_id).
+    try {
+      const church = dbNames().church;
+      const [owned] = await conn.query(
+        `SELECT c.id, c.name FROM ${qt(church, 'members')} m
+           JOIN ${qt(church, 'churches')} c ON c.id = m.church_id
+          WHERE m.user_id = ? AND m.role = 'owner'`, [u.id]);
+      if (owned.length) {
+        const err = new Error(`${u.userName} is the owner of church ${owned.map((c) => `#${c.id} "${c.name}"`).join(', ')}. ` +
+          'Delete the church first: node db/approveChurch.js <id> delete');
+        err.code = 'CHURCH_OWNER';
+        throw err;
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_DB_ERROR') throw e;   // church database not created yet
     }
 
     const refs = await findRefColumns(conn, USER_COLS);

@@ -2,6 +2,7 @@ const express = require('express');
 const { owenenterprises: db, bgtracker } = require('../db/db');
 const { requireDoctor, requireApprovedDoctor } = require('../middleware/doctor');
 const { requirePatientAccess } = require('../middleware/patientAccess');
+const { hipaaGate } = require('../middleware/hipaaGate');
 const { selectWeights } = require('../db/sql/bgtracker/weights');
 const { selectBloodPressures } = require('../db/sql/bgtracker/bloodpressures');
 const { selectReadings } = require('../db/sql/bgtracker/readings');
@@ -62,7 +63,7 @@ router.get('/patients', requireApprovedDoctor, async (req, res) => {
 // with this doctor and nothing else. Same SELECT + ordering the patient's own
 // GET routes use, just scoped to :patientId instead of the signed-in user.
 router.get('/patients/:patientId/weights',
-  requireApprovedDoctor, requirePatientAccess('shareWeight'), async (req, res) => {
+  requireApprovedDoctor, requirePatientAccess('shareWeight'), hipaaGate({ subject: 'patient' }), async (req, res) => {
     try {
       const [results] = await bgtracker.promise().query(
         selectWeights + ' WHERE user_id=? ORDER BY date, id',
@@ -75,7 +76,7 @@ router.get('/patients/:patientId/weights',
   });
 
 router.get('/patients/:patientId/bloodpressures',
-  requireApprovedDoctor, requirePatientAccess('shareBP'), async (req, res) => {
+  requireApprovedDoctor, requirePatientAccess('shareBP'), hipaaGate({ subject: 'patient' }), async (req, res) => {
     try {
       const [results] = await bgtracker.promise().query(
         selectBloodPressures + ' WHERE user_id=? ORDER BY date, id',
@@ -88,7 +89,7 @@ router.get('/patients/:patientId/bloodpressures',
   });
 
 router.get('/patients/:patientId/readings',
-  requireApprovedDoctor, requirePatientAccess('shareReadings'), async (req, res) => {
+  requireApprovedDoctor, requirePatientAccess('shareReadings'), hipaaGate({ subject: 'patient' }), async (req, res) => {
     try {
       const [results] = await bgtracker.promise().query(
         selectReadings + ' WHERE user_id=? ORDER BY date, id',
@@ -101,7 +102,7 @@ router.get('/patients/:patientId/readings',
   });
 
 router.get('/patients/:patientId/medications',
-  requireApprovedDoctor, requirePatientAccess('shareMedications'), async (req, res) => {
+  requireApprovedDoctor, requirePatientAccess('shareMedications'), hipaaGate({ subject: 'patient' }), async (req, res) => {
     try {
       const [results] = await bgtracker.promise().query(
         selectMedications + ' WHERE user_id=? ORDER BY name, id',

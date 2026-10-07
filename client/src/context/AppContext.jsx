@@ -14,7 +14,7 @@ export const InitialState = {
   token: _session.token || null,
   activeFeature: null,
   featurePreferences: {
-    chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1,
+    chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1, chkChurch: 0,
   },
   users: [],
   user: _session.user

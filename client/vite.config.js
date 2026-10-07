@@ -12,6 +12,8 @@ const API_PREFIXES = [
   '/bgtracker',
   '/communitylibrary',
   '/meetings',
+  '/church',
+  '/hipaa',
   '/doctor',
   '/admin',
   '/patient-doctors',
