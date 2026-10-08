@@ -137,19 +137,6 @@ router.post('/signin', async (req, res) => {
     if (!match) return res.status(400).json({ error: 'Incorrect password' });
 
     const { password: _pw, ...safeUser } = rows[0];
-
-    // Two-step sign-in: someone with MFA on gets a short-lived mfaToken instead
-    // of a session token and finishes at POST /auth/mfa/verify.
-    const mfa = await query('SELECT phoneEnc, phoneLast4 FROM user_mfa WHERE user_id=? AND enabled=1', [safeUser.id]);
-    if (mfa && mfa.length > 0) {
-      // A remembered device (30 days, see utils/mfaDevices.js) skips the second step; the password was still checked.
-      const trusted = await require('../utils/mfaDevices').isTrusted(safeUser.id, req.body.deviceToken);
-      if (!trusted) {
-        const mfaToken = jwt.sign({ id: safeUser.id, purpose: 'mfa' }, SECRET, { expiresIn: '10m' });
-        return res.json({ mfaRequired: true, mfaToken,
-          mfaMethod: mfa[0].phoneEnc ? 'sms' : 'authenticator', phoneHint: mfa[0].phoneLast4 || '' });
-      }
-    }
     const token = signToken(safeUser);
 
     // Return { results: [user], token } — consistent shape the frontend expects
@@ -169,7 +156,6 @@ router.post('/tokenIsValid', async (req, res) => {
 
   try {
     const verified = jwt.verify(token, SECRET);
-    if (verified.purpose === 'mfa') return res.json(false); // half-finished sign-in, not a session
     const rows = await query(selectUser + ' WHERE id=?', [verified.id]);
     return res.json(Boolean(rows && rows.length > 0));
   } catch {
@@ -331,4 +317,3 @@ router.delete('/account', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-module.exports.signToken = signToken;

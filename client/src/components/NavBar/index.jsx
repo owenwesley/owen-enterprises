@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Switch, Route, Link, Redirect, useLocation, useHistory } from 'react-router-dom';
+import { BrowserRouter as Router, Switch, Route, Link, Redirect, useLocation } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -56,8 +56,6 @@ function lazyPage(load) {
 
 const FeaturePreferencesPage = lazyPage(() => import('../../pages/FeaturePreferencesPage'));
 const ProfilePage = lazyPage(() => import('../../pages/ProfilePage'));
-const SecurityPage = lazyPage(() => import('../../pages/SecurityPage'));
-const ConsentPage = lazyPage(() => import('../../pages/ConsentPage'));
 const DoctorHomePage = lazyPage(() => import('../../pages/DoctorHomePage'));
 const DoctorClinicPage = lazyPage(() => import('../../pages/DoctorClinicPage'));
 const DoctorPatientDetailPage = lazyPage(() => import('../../pages/DoctorPatientDetailPage'));
@@ -154,21 +152,6 @@ function ResetEditOnNavigate() {
 // Phones and small tablets (< 900px) get a hamburger + drawer instead of the
 // horizontally scrolling link strip; the bar keeps only home/profile/settings
 // and a compact logout so nothing is pushed off-screen.
-// The server's HIPAA gate asked for two-step sign-in or the consent forms (see utils/api.js):
-// open /consent. Lives inside <Router> so it can navigate.
-function HipaaRedirect() {
-  const history = useHistory();
-  useEffect(() => {
-    const open = () => {
-      const p = window.location.pathname;
-      if (!p.startsWith('/consent') && !p.startsWith('/security')) history.push('/consent');
-    };
-    window.addEventListener('oe:hipaa-required', open);
-    return () => window.removeEventListener('oe:hipaa-required', open);
-  }, [history]);
-  return null;
-}
-
 function TopBar({ navItems }) {
   const { state, dispatch } = useAppContext();
   const { activeFeature } = state;
@@ -282,7 +265,6 @@ export default function NavBar() {
 
   useEffect(() => { registerTokenGetter(() => state.token); }, [state.token]);
 
-
   const { loadFeaturePreferences } = useFeaturePreferences();
   const { loadUserPreference } = usePreferences();
   const { rebuildAllCharts } = useChartData();
@@ -346,7 +328,6 @@ export default function NavBar() {
     <Router>
       <div className="app-shell">
       <ResetEditOnNavigate />
-      <HipaaRedirect />
       {user.isLogedIn && <TopBar navItems={navItems} />}
 
       <div className="app-content">
@@ -393,8 +374,6 @@ export default function NavBar() {
 
         <Route path="/feature-preferences"><AuthGate><FeaturePreferencesPage /></AuthGate></Route>
         <Route path="/profile"><AuthGate><ProfilePage /></AuthGate></Route>
-        <Route path="/security"><AuthGate><SecurityPage /></AuthGate></Route>
-        <Route path="/consent"><AuthGate><ConsentPage /></AuthGate></Route>
 
         {/* BGTracker */}
         <Route path="/bptracker">     <AuthGate><BloodPressurePage /></AuthGate></Route>

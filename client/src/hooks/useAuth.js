@@ -2,21 +2,6 @@ import { useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { postFetch } from '../utils/api';
 
-// "Remember this device": a random token the server gave us after a good second step,
-// kept per username in this browser and sent back with the password (server: utils/mfaDevices.js).
-const DEVICE_KEY = 'oe_devices';
-function readDevices() {
-  try { return JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}') || {}; } catch { return {}; }
-}
-const getDeviceToken = (userName) => readDevices()[String(userName || '').toLowerCase()] || '';
-function saveDeviceToken(userName, token) {
-  try { localStorage.setItem(DEVICE_KEY, JSON.stringify({ ...readDevices(), [String(userName || '').toLowerCase()]: token })); } catch { /* storage unavailable */ }
-}
-export function forgetDeviceToken(userName) {
-  const all = readDevices(); delete all[String(userName || '').toLowerCase()];
-  try { localStorage.setItem(DEVICE_KEY, JSON.stringify(all)); } catch { /* storage unavailable */ }
-}
-
 export function useAuth() {
   const { state, dispatch } = useAppContext();
   const { user } = state;
@@ -65,29 +50,7 @@ export function useAuth() {
     return true;
   }, [user, dispatch]);
 
-  // Stores a finished sign-in ({ results: [user], token }) exactly as before.
-  const finishLogin = useCallback((data) => {
-    const loggedInUser = data.results[0];
-    // Persist session so page refresh keeps user logged in
-    sessionStorage.setItem('oe_token', data.token);
-    sessionStorage.setItem('oe_user', JSON.stringify(loggedInUser));
-    dispatch({ type: 'SET_TOKEN',   payload: data.token });
-    dispatch({ type: 'UPDATE_USER', payload: { ...loggedInUser, isLogedIn: true, loginError: '',
-      mfaRequired: false, mfaToken: '', mfaNotice: '' } });
-    return loggedInUser;
-  }, [dispatch]);
-
   // ── Sign in → POST /auth/signin ───────────────────────────────────────────
-  // Asks the server to text a (new) code. Used when step 2 opens and by "Send a new code".
-  const sendMfaText = useCallback(async (mfaToken, phoneHint) => {
-    const res = await postFetch('/auth/mfa/send', { mfaToken });
-    if (res && res.sent) {
-      dispatch({ type: 'UPDATE_USER', payload: { mfaNotice: `We texted a code to the phone ending in ${res.phoneHint || phoneHint || ''}.`, loginError: '' } });
-    } else {
-      dispatch({ type: 'UPDATE_USER', payload: { mfaNotice: '', loginError: (res && res.error) || 'The text could not be sent.' } });
-    }
-  }, [dispatch]);
-
   const handleLogIn = useCallback(async () => {
     const { userName, password } = user;
     if (!userName || !password) {
@@ -95,8 +58,7 @@ export function useAuth() {
       return null;
     }
 
-    const deviceToken = getDeviceToken(userName);
-    const data = await postFetch('/auth/signin', { userName, password, ...(deviceToken ? { deviceToken } : {}) });
+    const data = await postFetch('/auth/signin', { userName, password });
 
     if (!data) {
       dispatch({ type: 'UPDATE_USER', payload: { loginError: 'Server unreachable' } });
@@ -107,45 +69,15 @@ export function useAuth() {
       return null;
     }
 
-    // Two-step sign-in: the password was right. Text messages get sent straight away.
-    if (data.mfaRequired) {
-      dispatch({ type: 'UPDATE_USER', payload: { mfaRequired: true, mfaToken: data.mfaToken,
-        mfaMethod: data.mfaMethod, phoneHint: data.phoneHint || '', mfaNotice: '', loginError: '' } });
-      if (data.mfaMethod === 'sms') await sendMfaText(data.mfaToken, data.phoneHint);
-      return null;
-    }
-    return finishLogin(data);
-  }, [user, dispatch, finishLogin, sendMfaText]);
-
-  // ── Step 2 → POST /auth/mfa/verify (6-digit app code or a recovery code) ────
-  const handleMfaVerify = useCallback(async (code, rememberDevice = false) => {
-    if (!String(code || '').trim()) {
-      dispatch({ type: 'UPDATE_USER', payload: { loginError: 'Enter the code' } });
-      return null;
-    }
-    const data = await postFetch('/auth/mfa/verify', { mfaToken: user.mfaToken, code, rememberDevice: rememberDevice === true });
-    if (!data) {
-      dispatch({ type: 'UPDATE_USER', payload: { loginError: 'Server unreachable' } });
-      return null;
-    }
-    if (data.error) {
-      // An expired sign-in sends the person back to the password step.
-      const expired = /expired/i.test(data.error);
-      dispatch({ type: 'UPDATE_USER', payload: { loginError: data.error,
-        ...(expired ? { mfaRequired: false, mfaToken: '' } : {}) } });
-      return null;
-    }
-    if (data.deviceToken) saveDeviceToken(user.userName, data.deviceToken);
-    return finishLogin(data);
-  }, [user, dispatch, finishLogin]);
-
-  // "Send a new code" on the second step.
-  const resendMfaText = useCallback(() => sendMfaText(user.mfaToken, user.phoneHint), [user, sendMfaText]);
-
-  // Back from the code step to the password step.
-  const cancelMfa = useCallback(() => {
-    dispatch({ type: 'UPDATE_USER', payload: { mfaRequired: false, mfaToken: '', mfaNotice: '', loginError: '' } });
-  }, [dispatch]);
+    // Server returns { results: [user], token }
+    const loggedInUser = data.results[0];
+    // Persist session so page refresh keeps user logged in
+    sessionStorage.setItem('oe_token', data.token);
+    sessionStorage.setItem('oe_user', JSON.stringify(loggedInUser));
+    dispatch({ type: 'SET_TOKEN',   payload: data.token });
+    dispatch({ type: 'UPDATE_USER', payload: { ...loggedInUser, isLogedIn: true, loginError: '' } });
+    return loggedInUser;
+  }, [user, dispatch]);
 
   // ── Register → POST /auth/signup ─────────────────────────────────────────
   const handleRegister = useCallback(async () => {
@@ -185,5 +117,5 @@ export function useAuth() {
     dispatch({ type: 'RESET' });
   }, [dispatch]);
 
-  return { handleUser, handleLogIn, handleMfaVerify, resendMfaText, cancelMfa, handleRegister, handleLogOut };
+  return { handleUser, handleLogIn, handleRegister, handleLogOut };
 }
