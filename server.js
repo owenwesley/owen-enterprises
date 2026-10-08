@@ -10,6 +10,7 @@ const path         = require('path');
 const multer       = require('multer');
 const auth         = require('./middleware/auth');
 const ownerOnly    = require('./middleware/ownerOnly');
+const { hipaaGate } = require('./middleware/hipaaGate');
 const initDatabases= require('./db/init');
 const { scheduleRetention } = require('./db/retention');
 const { scheduleRebuild } = require('./db/maintenance/scheduleRebuild');
@@ -20,6 +21,9 @@ const backfillInviteCodes = require('./db/backfillInviteCodes');
 
 const port = process.env.PORT || 4000;
 const app  = express();
+// Behind an HTTPS-terminating proxy (FORCE_HTTPS=on) trust X-Forwarded-Proto so req.secure is right.
+if (require('./middleware/forceHttps').isOn()) app.set('trust proxy', 1);
+app.use(require('./middleware/forceHttps'));
 
 // CORS: open to every origin by default (unchanged behaviour, so nothing that works
 // today stops working). To lock it down set CORS_ORIGIN in .env to a comma-separated
@@ -56,6 +60,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+app.use('/auth/mfa', require('./routes/mfa'));
 app.use('/auth', require('./routes/auth'));
 
 // ── Protected routes ──────────────────────────────────────────────────────────
@@ -68,12 +73,19 @@ app.use('/bgtracker',                auth,
   // GET /preferences/delete/:id takes a preferences row id, not a user id;
   // its SQL is restricted to the signed-in user's own row.
   ownerOnly({ exempt: [/^\/preferences\/delete\/[0-9]+$/] }),
+  // BGTracker flag + HIPAA consent + audit log; does nothing unless HIPAA_GATE=on.
+  hipaaGate(),
   require('./routes/bgtracker'));
+// HIPAA consent forms (only for people with BGTracker on).
+app.use('/hipaa',                    auth, ownerOnly(), require('./routes/hipaa'));
 app.use('/communitylibrary',         auth,
   // Image uploads carry no user data (they only write a file and return its URL).
   ownerOnly({ exempt: [/^\/upload\/(book|movie|collection)$/] }),
   require('./routes/communitylibrary'));
 app.use('/meetings',                 auth, ownerOnly(), require('./routes/meetings'));
+// Church module: every path ends with the user's id (ownerOnly); routes inside a
+// church also check the member's role through middleware/church.js.
+app.use('/church',                   auth, ownerOnly(), require('./routes/church'));
 // Doctor routes do their own role / approval checks (middleware/doctor.js).
 app.use('/doctor',                   auth, require('./routes/doctor'));
 // Admin routes do their own role check too (middleware/admin.js). There is no

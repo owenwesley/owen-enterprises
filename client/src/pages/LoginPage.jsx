@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
+import Checkbox from '@mui/material/Checkbox';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
@@ -45,18 +46,63 @@ export default function LoginPage() {
   const location = useLocation();
   const { state } = useAppContext();
   const registered = location.state && location.state.registered;
-  const { handleUser, handleLogIn } = useAuth();
+  const { handleUser, handleLogIn, handleMfaVerify, resendMfaText, cancelMfa } = useAuth();
+  const [code, setCode] = useState('');
+  const [remember, setRemember] = useState(false);
+  const step2 = Boolean(state.user.mfaRequired);
 
   const onLogin = async () => {
     const result = await handleLogIn();
     if (result) history.push('/');
   };
 
+  const onVerify = async () => {
+    const result = await handleMfaVerify(code, remember);
+    if (result) history.push('/');
+  };
+
   const onKey = (e) => { if (e.key === 'Enter') onLogin(); };
+  const onKeyCode = (e) => { if (e.key === 'Enter') onVerify(); };
 
   return (
     <div style={sxStyles.wrapper}>
       <Paper sx={sxStyles.card} elevation={6}>
+        {step2 ? (
+          <>
+            <Typography sx={sxStyles.sub}>
+              {state.user.mfaMethod === 'sms'
+                ? (state.user.mfaNotice || 'Enter the code we texted to your phone, or a recovery code.')
+                : 'Enter the 6-digit code from your authenticator app, or a recovery code.'}
+            </Typography>
+            <TextField label="Code" name="mfaCode" variant="outlined" size="small" autoFocus
+              value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onKeyCode}
+              inputProps={{ inputMode: 'text', autoComplete: 'one-time-code' }} fullWidth />
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem' }}>
+              <Checkbox id="remember-device" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <label htmlFor="remember-device">Remember this device for 30 days</label>
+            </div>
+            {state.user.loginError && (
+              <Typography sx={sxStyles.err}>{state.user.loginError}</Typography>
+            )}
+            <Button sx={sxStyles.btn} variant="contained" fullWidth onClick={onVerify}>
+              Verify
+            </Button>
+            {state.user.mfaMethod === 'sms' && (
+              <Typography sx={sxStyles.link} variant="body2">
+                <span style={{ color: '#1a237e', cursor: 'pointer', fontWeight: 600 }} onClick={resendMfaText}>
+                  Send a new code
+                </span>
+              </Typography>
+            )}
+            <Typography sx={sxStyles.link} variant="body2">
+              <span style={{ color: '#1a237e', cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => { setCode(''); cancelMfa(); }}>
+                Back
+              </span>
+            </Typography>
+          </>
+        ) : (
+          <>
         <Typography sx={sxStyles.sub}>Sign in to continue</Typography>
 
         {registered && (
@@ -86,6 +132,8 @@ export default function LoginPage() {
             Register
           </span>
         </Typography>
+          </>
+        )}
       </Paper>
     </div>
   );

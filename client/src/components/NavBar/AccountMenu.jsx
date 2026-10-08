@@ -28,6 +28,7 @@ const FEATURES = [
   { key: 'bgtracker',        prefKey: 'chkBgtracker',        label: 'BG Tracker' },
   { key: 'communityLibrary', prefKey: 'chkCommunityLibrary', label: 'Community Library' },
   { key: 'meetings',         prefKey: 'chkMeetings',         label: 'Meetings' },
+  { key: 'church',           prefKey: 'chkChurch',           label: 'Church' },
 ];
 
 // Upper-right account menu: replaces the separate My doctors / Profile /
@@ -99,6 +100,7 @@ export default function AccountMenu({ compact = false }) {
         <Divider />
 
         {linkItem('/profile', <AccountCircleIcon fontSize="small" />, 'My profile')}
+        {linkItem('/security', <SettingsIcon fontSize="small" />, 'Two-step sign-in')}
         {isPatient && featurePreferences.chkBgtracker === 1 &&
           linkItem('/my-doctors', <LocalHospitalIcon fontSize="small" />, 'My doctors')}
         {user.role === 'doctor' && linkItem('/doctor', <DashboardIcon fontSize="small" />, 'Doctor home')}

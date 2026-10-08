@@ -35,7 +35,7 @@
  * REFERENCED by other tables, and those references have to move with the ids
  * or every row would silently be re-attached to the wrong person/clinic:
  *
- *   users.id    <- users' `user_id` in every table of all four databases
+ *   users.id    <- users' `user_id` in every table of all five databases
  *                  (bgtracker, communitylibrary, meetings and
  *                  feature_preferences have NO foreign key on it, it is just
  *                  a number), plus doctor_profiles.user_id and
@@ -91,7 +91,7 @@ const MAX_SAFE_ID = 2147483647;   // conservative: signed INT
  * Columns that hold another table's id as a plain number (no FOREIGN KEY, so
  * information_schema can't find them). Keyed by the referenced table, which is
  * always in the gateway database. The columns are searched for by name in
- * every table of all four databases.
+ * every table of all five databases.
  */
 const ID_REFERENCES = {
   users:   ['user_id', 'doctor_id', 'patient_id'],

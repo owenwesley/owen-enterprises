@@ -43,6 +43,25 @@ export function notifyError(message) {
   report('', message);
 }
 
+// A 403 with one of these codes is not a plain "no permission": the server's HIPAA gate
+// (middleware/hipaaGate.js) wants two-step sign-in or the consent forms first. The
+// NavBar listens for 'oe:hipaa-required' and opens /consent instead of showing a toast.
+// BGTRACKER_DISABLED on /bgtracker is expected for anyone with BGTracker switched off
+// (the app loads readings at login for everybody), so it stays quiet there; on /doctor
+// it means the doctor's or the patient's BGTracker is off, which is worth saying.
+function reportFailure(url, res, data) {
+  const code = data && data.code;
+  if (res.status === 403 && (code === 'MFA_REQUIRED' || code === 'HIPAA_CONSENT_REQUIRED')) {
+    try { window.dispatchEvent(new CustomEvent('oe:hipaa-required', { detail: { code } })); } catch { /* non-browser */ }
+    return;
+  }
+  if (res.status === 403 && code === 'BGTRACKER_DISABLED') {
+    if (/^\/doctor/.test(url)) report(url, 'BGTracker is turned off for you or for this patient, so this information is not available.');
+    return;
+  }
+  report(url, messageFor(res, data));
+}
+
 function messageFor(res, body) {
   if (res.status === 401) return 'Your session has expired. Please sign in again.';
   if (res.status === 403) return 'You do not have permission to do that.';
@@ -57,7 +76,7 @@ async function request(method, url, body, label) {
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const data = await res.json();
-    if (!res.ok) report(url, messageFor(res, data));
+    if (!res.ok) reportFailure(url, res, data);
     return data;
   } catch (err) {
     console.error(`${label} ${url} failed:`, err);
@@ -85,7 +104,7 @@ export async function postFormData(url, formData) {
       body: formData,
     });
     const data = await res.json();
-    if (!res.ok) report(url, messageFor(res, data));
+    if (!res.ok) reportFailure(url, res, data);
     return data;
   } catch (err) {
     console.error(`POST (form-data) ${url} failed:`, err);

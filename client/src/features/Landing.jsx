@@ -101,6 +101,14 @@ const ALL_FEATURES = [
     desc: 'NA / AA meeting records, chips, medallions and running balance',
     bg: '#fff3e0',
   },
+  {
+    key: 'church',
+    prefKey: 'chkChurch',
+    icon: '⛪',
+    title: 'Church',
+    desc: 'Join your church, see its members and mission statement',
+    bg: '#f3e5f5',
+  },
 ];
 
 export default function Landing() {

@@ -10,6 +10,7 @@
  *   bgtracker        →  readings, bloodpressures, medications,
  *                        weights, nutritions, preferences, books, movies
  *   meetings         →  meetings          (own pool; own DB if configured)
+ *   church           →  churches, members (own pool; DB_CHURCH, default `church`)
  */
 
 const mysql = require('mysql2');
@@ -89,9 +90,93 @@ const TABLES = {
         user_id             INT        NOT NULL UNIQUE,
         chkBgtracker        TINYINT(1) NOT NULL DEFAULT 0,
         chkCommunityLibrary TINYINT(1) NOT NULL DEFAULT 0,
-        chkMeetings         TINYINT(1) NOT NULL DEFAULT 0
+        chkMeetings         TINYINT(1) NOT NULL DEFAULT 0,
+        chkChurch           TINYINT(1) NOT NULL DEFAULT 0
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
+      {
+      // One row per person per consent form version they accepted. A new
+      // form version adds a new row; old rows are kept as the record.
+      name: 'hipaa_consents',
+      sql: `CREATE TABLE IF NOT EXISTS hipaa_consents (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        user_id     INT         NOT NULL,
+        formKey     VARCHAR(60) NOT NULL,
+        formVersion VARCHAR(20) NOT NULL,
+        ipAddress   VARCHAR(45) NOT NULL DEFAULT '',
+        acceptedAt  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_consent (user_id, formKey, formVersion),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+      // Who touched BGTracker data. user_id is the person acting and
+      // patient_id the person whose data it was (NULL for your own data).
+      // Rows are kept when a user is deleted (SET NULL).
+      name: 'audit_log',
+      sql: `CREATE TABLE IF NOT EXISTS audit_log (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        user_id    INT          NULL,
+        patient_id INT          NULL,
+        action     VARCHAR(40)  NOT NULL,
+        resource   VARCHAR(255) NOT NULL,
+        outcome    ENUM('allowed','denied') NOT NULL,
+        ipAddress  VARCHAR(45)  NOT NULL DEFAULT '',
+        detail     VARCHAR(255) NOT NULL DEFAULT '',
+        createdAt  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_audit_user (user_id, createdAt),
+        KEY idx_audit_patient (patient_id, createdAt),
+        FOREIGN KEY (user_id)    REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+      // Two-step sign-in. Now by text message: phoneEnc is the phone number (stored
+      // encrypted) and pendingPhoneEnc one being confirmed. secretEnc and lastCounter
+      // belong to the older authenticator-app method and are only used for people who
+      // enrolled that way before the switch.
+      name: 'user_mfa',
+      sql: `CREATE TABLE IF NOT EXISTS user_mfa (
+        user_id     INT          PRIMARY KEY,
+        secretEnc   VARCHAR(255) NOT NULL DEFAULT '',
+        enabled     TINYINT(1)   NOT NULL DEFAULT 0,
+        lastCounter BIGINT       NOT NULL DEFAULT 0,
+          pendingPhoneEnc VARCHAR(255) NOT NULL DEFAULT '',
+          phoneEnc        VARCHAR(255) NOT NULL DEFAULT '',
+          phoneLast4      CHAR(4)      NOT NULL DEFAULT '',
+        createdAt   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+      // One-time recovery codes (only a hash is kept).
+      name: 'mfa_recovery_codes',
+      sql: `CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
+        id       INT AUTO_INCREMENT PRIMARY KEY,
+        user_id  INT         NOT NULL,
+        codeHash CHAR(64)    NOT NULL,
+        usedAt   TIMESTAMP   NULL,
+        UNIQUE KEY uq_recovery (user_id, codeHash),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+      // Phones we agreed not to ask again on. Only a hash of the device token is
+      // kept; the token itself lives in that browser. Lasts 30 days.
+      name: 'mfa_trusted_devices',
+      sql: `CREATE TABLE IF NOT EXISTS mfa_trusted_devices (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        user_id    INT          NOT NULL,
+        tokenHash  CHAR(64)     NOT NULL,
+        label      VARCHAR(120) NOT NULL DEFAULT '',
+        createdAt  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expiresAt  DATETIME     NOT NULL,
+        lastUsedAt DATETIME     NULL,
+        UNIQUE KEY uq_device (tokenHash),
+        KEY idx_device_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
   ],
 
   bgtracker: [
@@ -463,6 +548,33 @@ const TABLES = {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
   ],
+
+  church: [
+    {
+      name: 'churches',
+      sql: `CREATE TABLE IF NOT EXISTS churches (
+        id               INT AUTO_INCREMENT PRIMARY KEY,
+        name             VARCHAR(150)  NOT NULL,
+        missionStatement VARCHAR(2000) NOT NULL DEFAULT '',
+        joinCode         VARCHAR(8)    NOT NULL UNIQUE,
+        status           ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'pending',
+        createdAt        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    },
+    {
+      name: 'members',
+      sql: `CREATE TABLE IF NOT EXISTS members (
+        id        INT AUTO_INCREMENT PRIMARY KEY,
+        church_id INT NOT NULL,
+        user_id   INT NOT NULL,
+        role      ENUM('owner','member') NOT NULL DEFAULT 'member',
+        status    ENUM('pending','active','removed') NOT NULL DEFAULT 'pending',
+        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_church_user (church_id, user_id),
+        FOREIGN KEY (church_id) REFERENCES churches(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    },
+  ],
 };
 
 function ensureDatabase(dbName, callback) {
@@ -549,5 +661,6 @@ const owenenterprises  = makePool('DB_GATEWAY',         'owenenterprises', 'owen
 const bgtracker        = makePool('DB_BGTRACKER',        'bgtracker',       'bgtracker',       TABLES.bgtracker);
 const communitylibrary = makePool('DB_COMMUNITYLIBRARY', 'communitylibrary','communitylibrary', TABLES.communitylibrary);
 const meetings         = makePool('DB_MEETINGS',         'meetings',        'meetings',         TABLES.meetings);
+const church           = makePool('DB_CHURCH',           'church',          'church',           TABLES.church);
 
-module.exports = { owenenterprises, bgtracker, communitylibrary, meetings };
+module.exports = { owenenterprises, bgtracker, communitylibrary, meetings, church };
