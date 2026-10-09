@@ -72,9 +72,9 @@ router.post('/:id/status', requireAdmin, async (req, res) => {
     let removedMembers = 0;
     if (status === 'rejected' || status === 'suspended') {
       const [rm] = await conn.query(
-        `UPDATE members SET status='removed', shareLibrary=0 WHERE church_id=? AND role='member' AND status<>'removed'`, [id]);
+        `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND role='member' AND status<>'removed'`, [id]);
       removedMembers = rm.affectedRows;
-      await conn.query('UPDATE members SET shareLibrary=0 WHERE church_id=?', [id]);
+      await conn.query(`UPDATE members SET shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=?`, [id]);
     }
     await conn.commit();
     return res.json({ message: `Church status set to ${status}`, removedMembers });

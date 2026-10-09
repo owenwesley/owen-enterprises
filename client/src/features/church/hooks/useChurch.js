@@ -72,6 +72,12 @@ export function useChurch() {
     return res;
   }, [userId, loadChurches]);
 
+  const setShareContact = useCallback(async (churchId, share, phone, address) => {
+    const res = await postFetch(`/church/${churchId}/contact/share/${userId}`, { share, phone, address });
+    await loadChurches();
+    return res;
+  }, [userId, loadChurches]);
+
   const getCatalog = useCallback(async (churchId) => {
     const data = await getFetch(`/church/${churchId}/library/${userId}`);
     return data?.results || [];
@@ -79,6 +85,6 @@ export function useChurch() {
 
   return {
     churches, loaded, loadChurches, createChurch, joinChurch, getMembers, approveMember, removeMember,
-    saveMission, leaveChurch, resetJoinCode, transferChurch, setShareLibrary, getCatalog,
+    saveMission, leaveChurch, resetJoinCode, transferChurch, setShareLibrary, setShareContact, getCatalog,
   };
 }

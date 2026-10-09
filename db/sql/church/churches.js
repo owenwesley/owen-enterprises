@@ -10,7 +10,7 @@ const updateMission = `UPDATE churches SET missionStatement=? WHERE id=?`;
 // Every church the user is in (pending, active) with their role in it.
 const selectMyChurches =
   `SELECT c.id AS churchId, c.name, c.missionStatement, c.status AS churchStatus, c.joinCode,
-          m.role, m.status AS memberStatus, m.shareLibrary
+          m.role, m.status AS memberStatus, m.shareLibrary, m.shareContact, m.contactPhone, m.contactAddress
      FROM members m JOIN churches c ON c.id = m.church_id
     WHERE m.user_id=? AND m.status <> 'removed'
     ORDER BY c.name, c.id`;

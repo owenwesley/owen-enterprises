@@ -44,7 +44,7 @@ export default function ChurchPage() {
   const {
     churches, loaded, loadChurches, createChurch, joinChurch, getMembers,
     approveMember, removeMember, saveMission, leaveChurch,
-    resetJoinCode, transferChurch, setShareLibrary, getCatalog,
+    resetJoinCode, transferChurch, setShareLibrary, setShareContact, getCatalog,
   } = useChurch();
 
   const [selectedId, setSelectedId] = useState(null);
@@ -59,6 +59,8 @@ export default function ChurchPage() {
   const [fMission, setFMission] = useState('');
   const [fCode, setFCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cPhone, setCPhone] = useState('');
+  const [cAddress, setCAddress] = useState('');
 
   useEffect(() => { loadChurches(); }, [loadChurches]);
 
@@ -85,6 +87,11 @@ export default function ChurchPage() {
   useEffect(() => { if (tab === 1) refreshMembers(); }, [tab, refreshMembers]);
   useEffect(() => { if (tab === 2) refreshCatalog(); }, [tab, refreshCatalog]);
   useEffect(() => { setTab(0); }, [selectedId]);
+  // Fill the contact fields from what the server holds whenever the church (or its saved values) changes.
+  useEffect(() => {
+    setCPhone(church ? church.contactPhone || '' : '');
+    setCAddress(church ? church.contactAddress || '' : '');
+  }, [church && church.churchId, church && church.contactPhone, church && church.contactAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = (name) => { setFName(''); setFMission(church && name === 'mission' ? church.missionStatement : ''); setFCode(''); setFMember(''); setFPassword(''); setDialog(name); };
   const close = () => { if (!busy) setDialog(null); };
@@ -108,6 +115,10 @@ export default function ChurchPage() {
   const onShare = async (checked) => {
     const r = await setShareLibrary(church.churchId, checked);
     if (r && !r.error) { setMsg(r.message); if (tab === 2) refreshCatalog(); }
+  };
+  const onShareContact = async (share) => {
+    const r = await setShareContact(church.churchId, share, cPhone.trim(), cAddress.trim());
+    if (r && !r.error) setMsg(r.message);
   };
   const onLeave = () => run(() => leaveChurch(church.churchId), 'You left the church');
 
@@ -148,7 +159,7 @@ export default function ChurchPage() {
               <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ minHeight: '40px' }}>
                 <Tab label="Overview" sx={{ minHeight: '40px' }} />
                 <Tab label={church.pendingMembers ? `Members (${church.pendingMembers} waiting)` : 'Members'} sx={{ minHeight: '40px' }} />
-                <Tab label="Library" sx={{ minHeight: '40px' }} />
+                <Tab label="Sharing" sx={{ minHeight: '40px' }} />
               </Tabs>
             )}
           </>
@@ -211,6 +222,25 @@ export default function ChurchPage() {
 
         {church && working && tab === 2 && (
           <>
+            <Paper sx={sxStyles.card} elevation={2}>
+              <FormControlLabel
+                control={<Switch id="share-contact" checked={!!church.shareContact} onChange={(e) => onShareContact(e.target.checked)} />}
+                label="Share my contact info with this church"
+                htmlFor="share-contact"
+              />
+              <Typography sx={{ color: '#666', fontSize: '0.85rem', marginBottom: '8px' }}>
+                Off by default. When on, other members of this church see your name and your account email in their Contacts page,
+                plus the phone and address you type below (both optional). They are not copied: if you leave, are removed, or switch
+                this off, you disappear from their Contacts and the phone and address are erased.
+              </Typography>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField size="small" label="Phone (optional)" value={cPhone} onChange={(e) => setCPhone(e.target.value)} inputProps={{ maxLength: 50, id: 'contact-phone' }} sx={{ flex: '1 1 160px' }} />
+                <TextField size="small" label="Address (optional)" value={cAddress} onChange={(e) => setCAddress(e.target.value)} inputProps={{ maxLength: 500, id: 'contact-address' }} sx={{ flex: '2 1 240px' }} />
+                {church.shareContact && (
+                  <Button variant="outlined" onClick={() => onShareContact(true)}>Save</Button>
+                )}
+              </div>
+            </Paper>
             <Paper sx={sxStyles.card} elevation={2}>
               <FormControlLabel
                 control={<Switch id="share-library" checked={!!church.shareLibrary} onChange={(e) => onShare(e.target.checked)} />}

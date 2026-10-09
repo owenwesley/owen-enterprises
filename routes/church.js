@@ -22,8 +22,14 @@
  *   GET  /church/:church_id/library/:user_id          library.view    church catalog
  *   POST /church/:church_id/library/share/:user_id    library.share   { share: true|false }
  *
- * Members are shown by display name only (first + last name); never an email.
- * Joining a church never exposes anyone's library, health or other data.
+ * Step 3:
+ *   GET  /church/contacts/:user_id                    church members who shared their contact info
+ *   POST /church/:church_id/contact/share/:user_id    contact.share   { share, phone, address }
+ *
+ * The member list shows display names only. A member's name and ACCOUNT email, plus a phone and
+ * address typed for this purpose, are shown to members of the same church ONLY when that member
+ * switched contact sharing on (off by default). Sharing is switched off and phone/address erased
+ * on leave, removal, reject or suspend. Joining a church never exposes anyone's health or other data.
  */
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -37,6 +43,7 @@ const {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
   approveMember, removeMember, leaveChurch, countPendingMembers,
   setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
+  setShareContact, selectContactSharers,
 } = require('../db/sql/church/members');
 const { selectSharedBooks, selectSharedMovies } = require('../db/sql/church/library');
 
@@ -78,6 +85,9 @@ router.get('/mine/:user_id', async (req, res) => {
         // The join code is shown to the owner of a working church only.
         joinCode: isOwner && live ? r.joinCode : undefined,
         shareLibrary: !!r.shareLibrary,
+        shareContact: !!r.shareContact,
+        contactPhone: r.contactPhone || '',
+        contactAddress: r.contactAddress || '',
         pendingMembers,
       });
     }
@@ -333,7 +343,7 @@ router.post('/:church_id/library/share/:user_id', requireChurch('library.share')
 // GET /church/:church_id/library/:user_id
 // One entry per member who switched sharing on: display name, books and movies.
 // Only whitelisted columns are read (db/sql/church/library.js): no borrower names,
-// no pictures, no contacts, no ids, no emails. Contacts are never part of this.
+// no pictures, no contacts, no ids, no emails. (Contact sharing is a separate opt-in below.)
 router.get('/:church_id/library/:user_id', requireChurch('library.view'), async (req, res) => {
   try {
     const [sharers] = await db.promise().query(selectSharingMembers, [req.church.id]);
@@ -368,6 +378,63 @@ router.get('/:church_id/library/:user_id', requireChurch('library.view'), async 
         };
       }),
     }));
+    return res.json({ results });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+const PHONE_MAX = 50;
+const ADDRESS_MAX = 500;
+
+// POST /church/:church_id/contact/share/:user_id   { share, phone, address }
+// Turning sharing off erases the phone and address stored for the church.
+router.post('/:church_id/contact/share/:user_id', requireChurch('contact.share'), async (req, res) => {
+  const share = req.body.share === true || req.body.share === 1 || req.body.share === '1' || req.body.share === 'true' ? 1 : 0;
+  const phone = share ? clean(req.body.phone) : '';
+  const address = share ? clean(req.body.address) : '';
+  if (phone.length > PHONE_MAX) return bad(res, `Phone must be ${PHONE_MAX} characters or fewer`);
+  if (address.length > ADDRESS_MAX) return bad(res, `Address must be ${ADDRESS_MAX} characters or fewer`);
+  try {
+    await db.promise().query(setShareContact, [share, phone, address, req.church.id, req.user.id]);
+    return res.json({
+      message: share ? 'Your contact info is now shared with your church members.' : 'Your contact info is no longer shared.',
+      shareContact: !!share, contactPhone: phone, contactAddress: address,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /church/contacts/:user_id
+// Live list for the Contacts page: nothing is copied into anyone's contacts table, so a person
+// who leaves, is removed, switches sharing off or whose church is suspended is gone at once.
+// Only: church name, first/last name, account email, the phone and address they chose to share.
+// No user ids. One entry per person (church names joined if they share several churches).
+router.get('/contacts/:user_id', async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(selectContactSharers, [req.user.id, req.user.id]);
+    if (!rows.length) return res.json({ results: [] });
+    const ids = [...new Set(rows.map((r) => r.user_id))];
+    const [users] = await gateway.promise().query('SELECT id, firstName, lastName, email FROM users WHERE id IN (?)', [ids]);
+    const byId = new Map(users.map((u) => [u.id, u]));
+    const seen = new Map();
+    for (const r of rows) {
+      const u = byId.get(r.user_id);
+      if (!u) continue;
+      const prev = seen.get(r.user_id);
+      if (prev) { if (!prev.churches.includes(r.churchName)) prev.churches.push(r.churchName); continue; }
+      seen.set(r.user_id, {
+        key: `church-${r.memberId}`,
+        firstName: u.firstName, lastName: u.lastName, email: u.email || '',
+        phoneNum: r.contactPhone || '', address: r.contactAddress || '',
+        churches: [r.churchName],
+      });
+    }
+    const results = [...seen.values()]
+      .map((x) => ({ ...x, church: x.churches.join(', ') }))
+      .map(({ churches, ...rest }) => rest)
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
     return res.json({ results });
   } catch (err) {
     return res.status(500).json({ error: err.message });

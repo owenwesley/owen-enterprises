@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.23** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.24** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -311,7 +311,7 @@ Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A chur
 
 **What step 1 does:** a user requests a church (it starts *pending*; an admin approves it with a script) and becomes its owner. Other users join with the church's 8-character join code and wait for the owner to approve them. The owner approves or declines people, removes members and edits the mission statement. Members see the member list (display names only) and the mission statement. Nothing else is shared: joining a church exposes no one's library, health data or contact details.
 
-**Step 2 (1.11.23) added** the library link (opt-in book and movie catalog; contacts are never shared), join-code reset, a wrong-code limit, ownership hand-over and a web page for church approval; see the 1.11.23 history entry. **Not built yet:** prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
+**Step 2 (1.11.23) added** the library link (opt-in book and movie catalog; contacts are never shared), join-code reset, a wrong-code limit, ownership hand-over and a web page for church approval; see the 1.11.23 history entry. **Step 3 (1.11.24) added** shared contact info between church members (opt-in, live, read-only in Contacts); see the 1.11.24 history entry. **Not built yet:** prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
 
 **Database `church`** (env `DB_CHURCH`, default `church`; the fifth database). `dbNames()` in `db/init.js` includes it, which is what makes `idRefs.js`, `rebuildTable.js`, `cleanOrphans.js` and `deleteUser.js` look inside it. Tables are named for what they hold:
 - `churches`: `id`, `name`, `missionStatement`, `joinCode` (8 characters, unique), `status` (`pending` / `approved` / `rejected` / `suspended`), `createdAt`.
@@ -389,6 +389,12 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.24** — Church module, step 3 (first part): church members appear in each other's Contacts.
+- **Opt-in contact sharing:** new columns `members.shareContact` (default 0), `contactPhone`, `contactAddress` (added to existing databases at start-up). `POST /church/:church_id/contact/share/:user_id` `{ share, phone, address }` (any active member) and `GET /church/contacts/:user_id`. A member who switches it on is shown to the other active members of the same approved church(es) with first and last name, the **account email**, and the phone and address typed on the Sharing tab (both optional; the two-step sign-in phone is never used). No user ids are sent.
+- **Live, not copied:** nothing is written to anyone's `contacts` table. The Contacts page shows a read-only "From my church" table under the person's own contacts. Switching sharing off, leaving, removal, rejecting or suspending a church makes the person disappear for everyone at once and erases the stored phone and address. Coming back does not restore sharing. A person in two shared churches is listed once with both church names.
+- **Client:** Church page tab "Library" renamed "Sharing" and now holds the contact switch (`share-contact`) with phone and address fields; `ContactsPage.jsx` and `hooks/useContacts.js` load the church list.
+- **Test:** `npm run check:church3` (41 checks; the server needs the HIPAA gate off and a Church-enabled database). The library catalog is unchanged and still carries no emails.
 
 **1.11.23** — Church module, step 2: join-code reset, wrong-code limit, ownership hand-over, library sharing, web page for church approval.
 - **Join-code reset:** `POST /church/:church_id/joincode/reset/:user_id` (owner only). The old code stops working at once; members and waiting requests are untouched. Button "New join code" on the Overview tab.

@@ -1,10 +1,18 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { getFetch, postFetch } from '../../../utils/api';
 
 export function useContacts() {
   const { state, dispatch } = useAppContext();
   const { contacts, user } = state;
+  // Live, read-only: church members who chose to share. Never stored in the contacts table.
+  const [churchContacts, setChurchContacts] = useState([]);
+
+  const getChurchContacts = useCallback(async () => {
+    if (!user.id) return;
+    const data = await getFetch(`/church/contacts/${user.id}`);
+    setChurchContacts(data?.results || []);
+  }, [user.id]);
 
   const getContacts = useCallback(async () => {
     if (!user.id) return;
@@ -35,7 +43,7 @@ export function useContacts() {
   }, [contacts, user.id, getContacts]);
 
   return {
-    contacts,
+    contacts, churchContacts, getChurchContacts,
     getContacts, addContact, saveContact, deleteContact,
   };
 }

@@ -12,14 +12,26 @@ const rerequestMember = `UPDATE members SET status='pending' WHERE id=? AND stat
 const approveMember = `UPDATE members SET status='active' WHERE id=? AND church_id=? AND status='pending'`;
 // Leaving or being removed always switches library sharing off (step 2).
 const removeMember =
-  `UPDATE members SET status='removed', shareLibrary=0 WHERE id=? AND church_id=? AND role='member' AND status IN ('pending','active')`;
+  `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE id=? AND church_id=? AND role='member' AND status IN ('pending','active')`;
 const leaveChurch =
-  `UPDATE members SET status='removed', shareLibrary=0 WHERE church_id=? AND user_id=? AND role='member' AND status IN ('pending','active')`;
+  `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND user_id=? AND role='member' AND status IN ('pending','active')`;
 // Step 2: library sharing, ownership hand-over.
 const setShareLibrary =
   `UPDATE members SET shareLibrary=? WHERE church_id=? AND user_id=? AND status='active'`;
 const selectSharingMembers =
   `SELECT user_id FROM members WHERE church_id=? AND status='active' AND shareLibrary=1 ORDER BY id`;
+// Step 3: contact sharing. Name and the account email come from the users table;
+// phone and address are typed by the member for this purpose only.
+const setShareContact =
+  `UPDATE members SET shareContact=?, contactPhone=?, contactAddress=? WHERE church_id=? AND user_id=? AND status='active'`;
+// People in the same APPROVED church(es) as :user who switched contact sharing on.
+const selectContactSharers =
+  `SELECT m.id AS memberId, m.user_id, c.name AS churchName, m.contactPhone, m.contactAddress
+     FROM members m
+     JOIN churches c ON c.id = m.church_id AND c.status='approved'
+    WHERE m.status='active' AND m.shareContact=1 AND m.user_id <> ?
+      AND m.church_id IN (SELECT mm.church_id FROM members mm WHERE mm.user_id=? AND mm.status='active')
+    ORDER BY c.name, m.id`;
 const selectTransferTarget =
   `SELECT id, user_id FROM members WHERE id=? AND church_id=? AND role='member' AND status='active'`;
 const setRole = `UPDATE members SET role=? WHERE id=? AND church_id=?`;
@@ -28,5 +40,5 @@ const countPendingMembers = `SELECT COUNT(*) AS n FROM members WHERE church_id=?
 module.exports = {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
   approveMember, removeMember, leaveChurch, countPendingMembers,
-  setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
+  setShareLibrary, selectSharingMembers, setShareContact, selectContactSharers, selectTransferTarget, setRole,
 };

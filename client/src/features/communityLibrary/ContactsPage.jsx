@@ -69,17 +69,21 @@ export default function ContactsPage() {
   const { state } = useAppContext();
   const { user } = state;
   const {
-    contacts, getContacts, addContact, saveContact, deleteContact,
+    contacts, churchContacts, getChurchContacts, getContacts, addContact, saveContact, deleteContact,
   } = useContacts();
 
   const [search,     setSearch]     = useState('');
   const [dialog,     setDialog]     = useState(null);
   const [newContact, setNewContact] = useState(null);
 
-  useEffect(() => { if (user.id) getContacts(); }, [user.id, getContacts]);
+  useEffect(() => { if (user.id) { getContacts(); getChurchContacts(); } }, [user.id, getContacts, getChurchContacts]);
 
   const filtered = contacts.filter((c) =>
     `${c.firstName} ${c.lastName} ${c.email} ${c.phoneNum}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredChurch = churchContacts.filter((c) =>
+    `${c.firstName} ${c.lastName} ${c.email} ${c.phoneNum} ${c.church}`.toLowerCase().includes(search.toLowerCase())
   );
 
   // Index into `contacts` (not the filtered list), so search never edits or deletes the wrong contact.
@@ -155,6 +159,41 @@ export default function ContactsPage() {
           </Table>
         </TableContainer>
       </Paper>
+
+      {filteredChurch.length > 0 && (
+        <Paper elevation={2} sx={{ marginTop: '16px' }} id="church-contacts">
+          <Typography sx={{ ...sxStyles.title, fontSize: '1.1rem', padding: '12px 16px 0' }}>⛪ From my church</Typography>
+          <Typography sx={{ color: '#666', fontSize: '0.8rem', padding: '0 16px 8px' }}>
+            Shared by members who chose to. Updated automatically, and anyone who leaves or stops sharing disappears from here.
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={sxStyles.th}>First Name</TableCell>
+                  <TableCell sx={sxStyles.th}>Last Name</TableCell>
+                  <TableCell sx={sxStyles.th}>Phone</TableCell>
+                  <TableCell sx={sxStyles.th}>Email</TableCell>
+                  <TableCell sx={sxStyles.th}>Address</TableCell>
+                  <TableCell sx={sxStyles.th}>Church</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredChurch.map((c) => (
+                  <TableRow key={c.key} hover>
+                    <TableCell>{c.firstName}</TableCell>
+                    <TableCell>{c.lastName}</TableCell>
+                    <TableCell>{c.phoneNum}</TableCell>
+                    <TableCell>{c.email}</TableCell>
+                    <TableCell>{c.address}</TableCell>
+                    <TableCell>{c.church}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
 
       <ContactDialog open={!!dialog} contact={dialog?.contact}
         onClose={() => setDialog(null)} onChange={handleDialogChange} onSave={handleSave} />
