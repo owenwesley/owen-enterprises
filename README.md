@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.19** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.20** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -347,6 +347,36 @@ Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A chur
 
 ---
 
+## HIPAA gate, two-step sign-in (text message) and HTTPS
+
+Everything here is **off until you set it in `.env`**, so installing the release changes nothing by itself.
+
+**What it does**
+- `HIPAA_GATE=on` — BGTracker data (a person's own, and a doctor's view of a patient) needs, in order: BGTracker switched on in Feature Access (`feature_preferences.chkBgtracker`; no row means off), two-step sign-in set up, the consent forms in `config/hipaaForms.js` accepted. Every access is written to `audit_log` *before* the data is served; if that write fails the request fails. Nothing is logged for people with BGTracker off. The client sends people to `/consent` (`client/src/pages/ConsentPage.jsx`) when the server answers `MFA_REQUIRED` or `HIPAA_CONSENT_REQUIRED`; `BGTRACKER_DISABLED` on `/bgtracker` is ignored quietly because readings are requested at login for everyone.
+- **Two-step sign-in by text message** (US and Canada numbers) through **Twilio Verify**, with 8 one-time recovery codes. Account menu > Two-step sign-in. Phone numbers are stored encrypted (`user_mfa.phoneEnc`).
+- **Remember this device for 30 days** (tick box on the code step). Only a hash of a random token is kept (`mfa_trusted_devices`); the password is always still required. Forgotten when two-step is turned off, the phone is changed, or "Forget remembered devices" is pressed.
+- People who enrolled with an authenticator app before 1.11.20 can still sign in with its code until they use "Switch to text messages".
+- `FORCE_HTTPS=on` — refuses plain HTTP (except `http://localhost`) and sends HSTS. Only use behind something that provides HTTPS and sets `X-Forwarded-Proto`. It does not create a certificate.
+
+**`.env` settings**
+
+| Setting | Meaning |
+|---|---|
+| `HIPAA_GATE=on` | turn the gate on |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Twilio console > Account info |
+| `TWILIO_VERIFY_SERVICE_SID` | Twilio console > Verify > Services > create one (starts `VA`) |
+| `MFA_KEY` | long random string; encrypts phone numbers and old authenticator secrets. Set once and keep it |
+| `FORCE_HTTPS=on` | see above |
+| `MFA_SMS_PROVIDER=mock` | **tests only**: no text is sent and the code is always 123456. Never on a real site |
+
+In the Twilio console allow only the **United States and Canada** (Verify service settings and Messaging > Geo permissions) so codes cannot be requested to other countries. Twilio's price page (checked 2026-10) lists $0.05 per successful verification plus about $0.0083 per US text; Canadian text prices were not checked. A text is billed even if never delivered or entered, which is why texts are limited to 5 per person per 15 minutes and why remembering a device matters.
+
+**Tests** (start the server for them as shown)
+- `npm run check:twilio` — no server needed; checks the Twilio request code against a local fake.
+- `npm run check:mfa` — server started with `MFA_SMS_PROVIDER=mock`.
+- `npm run check:hipaa` — server started with `HIPAA_GATE=on MFA_SMS_PROVIDER=mock`.
+- With the gate on, `npm run check` fails its BGTracker steps because its throwaway users have no flag, two-step sign-in or consent; run it with the gate off.
+
 ## Known limitations
 
 Please read these before putting real users' data on it.
@@ -359,6 +389,15 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.20** — HIPAA gate, audit log, two-step sign-in by text message (Twilio), consent screen, HTTPS option; med-tick deduction fix.
+- **Gate:** `middleware/hipaaGate.js` on `/bgtracker` and the doctor patient-data routes (see *HIPAA gate*). New tables in `owenenterprises`: `hipaa_consents`, `audit_log`, `user_mfa`, `mfa_recovery_codes`, `mfa_trusted_devices`. Off unless `HIPAA_GATE=on`.
+- **Two-step sign-in:** `routes/mfa.js` (`/auth/mfa`), `utils/smsVerify.js` (Twilio Verify, plain `fetch`), `utils/mfaDevices.js`, `utils/totp.js` (only for pre-1.11.20 authenticator enrolments). `/auth/signin` returns `{mfaRequired, mfaToken, mfaMethod, phoneHint}` instead of a session token when two-step is on and the device is not remembered.
+- **Client:** code step on the login page, `pages/SecurityPage.jsx`, `pages/ConsentPage.jsx` (`/security`, `/consent`), global handling of the gate's 403 codes in `utils/api.js`.
+- **Forms:** `config/hipaaForms.js`, version 2 (text-message wording, mentions Twilio). The privacy contact email is still a placeholder.
+- **HTTPS:** `middleware/forceHttps.js`.
+- **Fix:** ticking a Meds box on the Readings page deducted nothing unless the Medications page had been opened first; the list is now read from the server when saving (`useReadings.js`).
+- **Admin helper:** `node db/mfaCheck.js <userName>` (diagnostics for the older authenticator-app method).
 
 **1.11.19** — Church module, step 1: request a church, join with a code, owner approves members, mission statement.
 - **New fifth database `church`** (`DB_CHURCH`, default `church`) with `churches` and `members` (see *Church module*). Added to `dbNames()` so renumbering, orphan checks and account deletion cover it.

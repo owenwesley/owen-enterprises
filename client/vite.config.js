@@ -13,6 +13,7 @@ const API_PREFIXES = [
   '/communitylibrary',
   '/meetings',
   '/church',
+  '/hipaa',
   '/doctor',
   '/admin',
   '/patient-doctors',

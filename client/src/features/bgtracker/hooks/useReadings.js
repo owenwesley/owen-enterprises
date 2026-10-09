@@ -147,11 +147,33 @@ export function useReadings() {
     // as a number instead.
     const useSlidingScale = Number(pref.carbRatio) > 0;
 
+    // Fix: this used to fire deductMeds() whenever ANY meds box was
+    // checked, with no way to tell a box that was *just* checked from one
+    // that was already checked on a prior save — so re-saving an
+    // already-checked reading (e.g. to fix an unrelated sugar value)
+    // deducted the same scheduled dose again every time. Only a box that
+    // transitions from unchecked to checked on THIS edit should deduct.
+    const newlyChecked = {
+      B:   Boolean(row.chkMedsB)   && !original.chkMedsB,
+      L:   Boolean(row.chkMedsL)   && !original.chkMedsL,
+      D:   Boolean(row.chkMedsD)   && !original.chkMedsD,
+      Bed: Boolean(row.chkMedsBed) && !original.chkMedsBed,
+    };
+
+    // Fix: the medication list is only loaded into state when the Medications
+    // page is opened (pages.jsx), so on the Readings page `medications` was empty
+    // (or stale) and ticking a Meds box deducted nothing. Read the current list
+    // from the server right before it is needed. If that request fails, fall back
+    // to whatever is in state.
     // ONE working copy of the medication list for this whole save. The
     // sliding-scale deduction and the Meds-tick deduction both read and write
     // it, so the second can't start from the stale pre-edit quantities and
     // overwrite the first for the same medication.
     let workingMeds = [...medications];
+    if (useSlidingScale || Object.values(newlyChecked).some(Boolean)) {
+      const fresh = await getFetch(`/bgtracker/medications/${user.id}`);
+      if (fresh && Array.isArray(fresh.results)) workingMeds = fresh.results;
+    }
 
     if (useSlidingScale) {
       row.insulinFB  = calcSlidingScale(parseInt(row.sugarB  || 0), parseInt(row.carbsB  || 0), pref);
@@ -197,19 +219,6 @@ export function useReadings() {
 
     const updatedReadings = readings.map((r, i) => i === trueIdx ? row : r);
     dispatch({ type: 'SET_READINGS', payload: updatedReadings });
-
-    // Fix: this used to fire deductMeds() whenever ANY meds box was
-    // checked, with no way to tell a box that was *just* checked from one
-    // that was already checked on a prior save — so re-saving an
-    // already-checked reading (e.g. to fix an unrelated sugar value)
-    // deducted the same scheduled dose again every time. Only a box that
-    // transitions from unchecked to checked on THIS edit should deduct.
-    const newlyChecked = {
-      B:   Boolean(row.chkMedsB)   && !original.chkMedsB,
-      L:   Boolean(row.chkMedsL)   && !original.chkMedsL,
-      D:   Boolean(row.chkMedsD)   && !original.chkMedsD,
-      Bed: Boolean(row.chkMedsBed) && !original.chkMedsBed,
-    };
 
     if (Object.values(newlyChecked).some(Boolean)) {
       // Pass the working list (already reduced by any sliding-scale doses)
