@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.20** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.21** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -389,6 +389,11 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.21** — small follow-up to 1.11.20, no new features.
+- **Login order:** the client now loads feature settings before readings (`components/NavBar/index.jsx`). The server creates a missing `feature_preferences` row on the first GET and the HIPAA gate treats a missing row as BGTracker off, so with the gate on an older account could get an empty readings list on its first load.
+- **Audit log and account deletion:** comment in `db/init.js` and `db/db.js` corrected. `deleteUser.js` deletes audit_log rows by column name (`user_id` and `patient_id`), so the `SET NULL` foreign keys never act; this matches what the consent forms say. Behaviour unchanged. Waiting on the lawyer (see handoff note).
+- **Checked, no change needed:** sliding-scale insulin deduction after the 1.11.20 med fix (real browser: 100 -> 91 -> 91 on re-save -> 93 on a lower dose -> 89 with a Meds tick in the same save).
 
 **1.11.20** — HIPAA gate, audit log, two-step sign-in by text message (Twilio), consent screen, HTTPS option; med-tick deduction fix.
 - **Gate:** `middleware/hipaaGate.js` on `/bgtracker` and the doctor patient-data routes (see *HIPAA gate*). New tables in `owenenterprises`: `hipaa_consents`, `audit_log`, `user_mfa`, `mfa_recovery_codes`, `mfa_trusted_devices`. Off unless `HIPAA_GATE=on`.

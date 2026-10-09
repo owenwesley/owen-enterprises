@@ -292,9 +292,16 @@ export default function NavBar() {
 
   useEffect(() => {
     if (user.isLogedIn && user.id) {
-      loadFeaturePreferences(user.id);
+      // Feature settings first, readings after. The server creates a missing
+      // feature_preferences row on the first GET, and the HIPAA gate treats a
+      // missing row as "BGTracker off". Run in parallel, the readings request
+      // could arrive before that row existed (an account older than the
+      // sign-up code that creates it) and come back empty until the next load.
       loadUserPreference(user.id);
-      getReadings(user.id);
+      (async () => {
+        try { await loadFeaturePreferences(user.id); } catch (e) { console.error(e); }
+        getReadings(user.id);
+      })();
     }
   }, [user.isLogedIn, user.id, getReadings, loadFeaturePreferences, loadUserPreference]);
 

@@ -112,7 +112,12 @@ const TABLES = {
       {
       // Who touched BGTracker data. user_id is the person acting and
       // patient_id the person whose data it was (NULL for your own data).
-      // Rows are kept when a user is deleted (SET NULL).
+      // The foreign keys say SET NULL, but db/maintenance/deleteUser.js (and so
+      // DELETE /auth/account) deletes by column NAME, so every row whose user_id
+      // OR patient_id is the deleted person is removed too, including rows about
+      // them written when a doctor looked at their data. The consent forms say
+      // this. To keep the log instead: skip audit_log in deleteUser.js and change
+      // the forms (config/hipaaForms.js, raise the version).
       name: 'audit_log',
       sql: `CREATE TABLE IF NOT EXISTS audit_log (
         id         INT AUTO_INCREMENT PRIMARY KEY,
