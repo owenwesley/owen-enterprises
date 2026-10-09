@@ -23,6 +23,7 @@
  *   POST /church/:church_id/library/share/:user_id    library.share   { share: true|false }
  *
  * Step 3:
+ *   GET  /church/shared-library/:user_id              books and movies other members shared (read-only, for the search on Books / Movies)
  *   GET  /church/contacts/:user_id                    church members who shared their contact info
  *   POST /church/:church_id/contact/share/:user_id    contact.share   { share, phone, address }
  *
@@ -59,7 +60,7 @@ const {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
   approveMember, removeMember, removeAnyMember, leaveChurch, countPendingMembers, selectRoleTarget,
   setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
-  setShareContact, selectContactSharers,
+  setShareContact, selectContactSharers, selectLibrarySharers,
 } = require('../db/sql/church/members');
 const { selectSharedBooks, selectSharedMovies } = require('../db/sql/church/library');
 const { selectAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement } = require('../db/sql/church/announcements');
@@ -460,6 +461,42 @@ router.post('/:church_id/contact/share/:user_id', requireChurch('contact.share')
     return res.json({
       message: share ? 'Your contact info is now shared with your church members.' : 'Your contact info is no longer shared.',
       shareContact: !!share, contactPhone: phone, contactAddress: address,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /church/shared-library/:user_id
+// Live, read-only list for the Books and Movies pages: other members' shared titles, so a search there
+// can say "Russ has it". Nothing is copied into anyone's tables and there is no edit or delete route
+// for these rows: the Community Library routes only ever touch the signed-in user's own rows
+// (WHERE id=? AND user_id=?). Same whitelist as the church catalog: no borrower names, pictures,
+// ids or emails. Only people from a church where the viewer has also switched sharing on.
+router.get('/shared-library/:user_id', async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(selectLibrarySharers, [req.user.id, req.user.id]);
+    if (!rows.length) return res.json({ books: [], movies: [] });
+    const ids = [...new Set(rows.map((r) => r.user_id))];
+    const [users] = await gateway.promise().query('SELECT id, firstName, lastName FROM users WHERE id IN (?)', [ids]);
+    const names = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()]));
+    const churchOf = new Map();
+    for (const r of rows) churchOf.set(r.user_id, [...(churchOf.get(r.user_id) || []), r.churchName].filter((x, i, a) => a.indexOf(x) === i));
+    const owner = (id) => ({ sharedBy: names.get(id), church: churchOf.get(id).join(', ') });
+    const [books] = await library.promise().query(selectSharedBooks, [ids]);
+    const [movies] = await library.promise().query(selectSharedMovies, [ids]);
+    return res.json({
+      books: books.filter((b) => names.has(b.user_id)).map((b) => ({
+        ...owner(b.user_id), title: b.title, author: b.author, year: b.copywrite || undefined, available: b.io === 1 && !b.lost,
+      })),
+      movies: movies.filter((m) => names.has(m.user_id)).map((m) => {
+        const count = Math.min(Math.max(Number(m.numMovie) || 1, 1), 12);
+        const films = [];
+        for (let i = 1; i <= count; i++) {
+          if (m[`name${i}`]) films.push({ name: m[`name${i}`], available: m[`io${i}`] === 1 && !m.lost });
+        }
+        return { ...owner(m.user_id), name: m.name, media: m.featureMedia || undefined, available: m.io === 1 && !m.lost, films };
+      }),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });

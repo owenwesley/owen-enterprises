@@ -18,6 +18,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import InputAdornment from '@mui/material/InputAdornment';
 import Input from '@mui/material/Input';
+import SharedResults from './SharedResults';
 import { useBooks } from './hooks/useLibrary';
 import { useContacts } from './hooks/useContacts';
 import { useAppContext } from '../../context/AppContext';
@@ -241,6 +242,8 @@ export default function BooksPage() {
           </Card>
         ))}
       </div>
+
+      <SharedResults kind="books" search={search} />
 
       <BookDialog
         open={!!dialog}

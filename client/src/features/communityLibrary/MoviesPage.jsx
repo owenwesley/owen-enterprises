@@ -23,6 +23,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import { useAppContext } from '../../context/AppContext';
+import SharedResults from './SharedResults';
 import { useMovies, isCollection, filmCount, collectionSlots, removeFilm, emptyMovie, outSummary, ioLabel } from './hooks/useMovies';
 import { useContacts } from './hooks/useContacts';
 import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
@@ -656,6 +657,8 @@ export default function MoviesPage() {
           })}
         </div>
       </div>
+
+      <SharedResults kind="movies" search={search} />
 
       <FilmsDialog
         movie={filmsMovie} onClose={() => setFilmsId(null)}

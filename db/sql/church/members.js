@@ -35,6 +35,15 @@ const selectContactSharers =
     WHERE m.status='active' AND m.shareContact=1 AND m.user_id <> ?
       AND m.church_id IN (SELECT mm.church_id FROM members mm WHERE mm.user_id=? AND mm.status='active')
     ORDER BY c.name, m.id`;
+// Members of my approved church(es) who switched library sharing on, other than me. Reciprocal: it only
+// returns people from a church where I have switched my own library sharing on too.
+const selectLibrarySharers =
+  `SELECT m.user_id, c.name AS churchName
+     FROM members m
+     JOIN churches c ON c.id = m.church_id AND c.status='approved' AND c.areaLibrary=1
+    WHERE m.status='active' AND m.shareLibrary=1 AND m.user_id <> ?
+      AND m.church_id IN (SELECT mm.church_id FROM members mm WHERE mm.user_id=? AND mm.status='active' AND mm.shareLibrary=1)
+    ORDER BY c.name, m.id`;
 const selectTransferTarget =
   `SELECT id, user_id FROM members WHERE id=? AND church_id=? AND role<>'owner' AND status='active'`;
 const setRole = `UPDATE members SET role=? WHERE id=? AND church_id=?`;
@@ -45,5 +54,5 @@ const countPendingMembers = `SELECT COUNT(*) AS n FROM members WHERE church_id=?
 module.exports = {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
   approveMember, removeMember, removeAnyMember, leaveChurch, countPendingMembers, selectRoleTarget,
-  setShareLibrary, selectSharingMembers, setShareContact, selectContactSharers, selectTransferTarget, setRole,
+  setShareLibrary, selectSharingMembers, setShareContact, selectContactSharers, selectLibrarySharers, selectTransferTarget, setRole,
 };

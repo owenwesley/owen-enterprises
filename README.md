@@ -390,6 +390,12 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.11.26** — Books and Movies search now also shows what church members have shared (read-only).
+- **What it does:** type in the Books or Movies search box and, under your own results, a "Shared by your church (view only)" list shows matching titles other members have shared, with who has it ("Russ Sharer has it · Grace Church") and In / Out. There are no edit or delete buttons on those rows, and the server has no route that can change another person's row (edit and delete are `WHERE id=? AND user_id=?`).
+- **Rules:** it is reciprocal, you only see members of a church where you have also switched library sharing on. Never your own items, never borrower names, pictures, ids or emails. Switching sharing off, leaving, removal, suspension or the owner's Library area switch removes it at once. Nothing is copied into anyone's tables.
+- **Server:** `GET /church/shared-library/:user_id` (`routes/church.js`), SQL `selectLibrarySharers` in `db/sql/church/members.js`. **Client:** `communityLibrary/SharedResults.jsx`, used by `BooksPage.jsx` and `MoviesPage.jsx`.
+- **Test:** `npm run check:church6` (12 checks; HIPAA gate off, Church-enabled database).
+
 **1.11.25** — Church module, step 3 (rest): announcements, roles, per-church area switches.
 - **Announcements:** `GET /church/:id/announcements/:uid` (any active member, newest first, max 100), `POST .../announcements/post|edit|delete/:uid` (permission `announcements.post`). Table `announcements` (title 150, body 4000). A member who later leaves shows as "Former member". Do not post private details: the dialog says so.
 - **Roles:** `owner`, `leader`, `treasurer`, `missions`, `member` (`members.role` ENUM widened automatically at start-up; existing rows unchanged). The owner sets a role with `POST /church/:id/members/role/:uid` `{ memberId, role }` (never `owner`: that is the hand-over). A **leader** posts announcements and approves / declines / removes ordinary members only; cannot edit the mission, reset the code, hand over, set roles or area switches. **Treasurer and mission leader are labels only** until finances / missions exist. `GET /church/mine` now returns `permissions` and `areas`, and the page uses them instead of guessing from the role name.
