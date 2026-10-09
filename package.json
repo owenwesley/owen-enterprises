@@ -1,6 +1,6 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.11.22",
+  "version": "1.11.23",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -8,6 +8,7 @@
     "client": "npm run dev --prefix client",
     "check": "node tests/prerelease-check.js",
     "check:church": "node tests/church-role-matrix.js",
+    "check:church2": "node tests/church-step2.js",
     "check:hipaa": "node tests/hipaa-gate.js",
     "check:mfa": "node tests/mfa.js",
     "check:twilio": "node tests/twilio-request.js",

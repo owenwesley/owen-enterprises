@@ -16,25 +16,42 @@
  *   POST /church/:church_id/members/remove/:user_id   members.manage  { memberId }
  *   POST /church/:church_id/edit/:user_id             church.edit     { missionStatement }
  *   POST /church/:church_id/leave/:user_id            leave (or withdraw a request)
+ * Step 2:
+ *   POST /church/:church_id/joincode/reset/:user_id   joincode.reset  new join code
+ *   POST /church/:church_id/transfer/:user_id         church.transfer { memberId, password }
+ *   GET  /church/:church_id/library/:user_id          library.view    church catalog
+ *   POST /church/:church_id/library/share/:user_id    library.share   { share: true|false }
  *
  * Members are shown by display name only (first + last name); never an email.
  * Joining a church never exposes anyone's library, health or other data.
  */
 const express = require('express');
-const { church: db, owenenterprises: gateway } = require('../db/db');
+const bcrypt = require('bcryptjs');
+const { church: db, owenenterprises: gateway, communitylibrary: library } = require('../db/db');
+const { makeLimiter } = require('../utils/attemptLimit');
 const { requireChurch } = require('../middleware/church');
 const { genCode } = require('../db/backfillInviteCodes');
 const { toStr } = require('../utils/coerce');
-const { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches } = require('../db/sql/church/churches');
+const { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode } = require('../db/sql/church/churches');
 const {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
   approveMember, removeMember, leaveChurch, countPendingMembers,
+  setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
 } = require('../db/sql/church/members');
+const { selectSharedBooks, selectSharedMovies } = require('../db/sql/church/library');
 
 const router = express.Router();
 const NAME_MAX = 150;
 const MISSION_MAX = 2000;
 const clean = (v) => toStr(v).trim();
+
+// In-memory limits (a restart clears them, like routes/mfa.js).
+//  - wrong join codes: 5 per person per 15 minutes, 50 per IP per hour
+//  - wrong passwords on hand-over: 5 per person per 15 minutes
+const codeMissesByUser = makeLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+const codeMissesByIp   = makeLimiter({ max: 50, windowMs: 60 * 60 * 1000 });
+const passwordMisses   = makeLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+const waitText = (m) => `${m} minute${m === 1 ? '' : 's'}`;
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 const notFound = (res) => res.status(404).json({ error: 'Nothing was updated — that row was not found.' });
 
@@ -60,6 +77,7 @@ router.get('/mine/:user_id', async (req, res) => {
         memberStatus: r.memberStatus,
         // The join code is shown to the owner of a working church only.
         joinCode: isOwner && live ? r.joinCode : undefined,
+        shareLibrary: !!r.shareLibrary,
         pendingMembers,
       });
     }
@@ -116,10 +134,19 @@ router.post('/create/:user_id', async (req, res) => {
 router.post('/join/:user_id', async (req, res) => {
   const code = clean(req.body.joinCode).toUpperCase();
   if (!code) return bad(res, 'Enter the join code');
+  const userKey = `u${req.user.id}`;
+  const ipKey = `ip${req.ip}`;
+  const wait = Math.max(codeMissesByUser.locked(userKey), codeMissesByIp.locked(ipKey));
+  if (wait) return bad(res, `Too many wrong join codes. Try again in ${waitText(wait)}.`, 429);
   try {
     const [found] = await db.promise().query(selectChurchByJoinCode, [code]);
     // An unknown code and a church that is not approved look the same.
-    if (!found.length || found[0].status !== 'approved') return bad(res, 'Join code not found', 404);
+    if (!found.length || found[0].status !== 'approved') {
+      codeMissesByUser.miss(userKey);
+      codeMissesByIp.miss(ipKey);
+      return bad(res, 'Join code not found', 404);
+    }
+    codeMissesByUser.clear(userKey);   // a right code forgets earlier wrong ones
     const church = found[0];
 
     const [mem] = await db.promise().query(selectMembership, [church.id, req.user.id]);
@@ -213,6 +240,135 @@ router.post('/:church_id/leave/:user_id', async (req, res) => {
     const [r] = await db.promise().query(leaveChurch, [churchId, req.user.id]);
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'You left the church' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Step 2 ─────────────────────────────────────────────────────────────────────
+
+// POST /church/:church_id/joincode/reset/:user_id
+// The old code stops working at once. Members and waiting requests are untouched.
+router.post('/:church_id/joincode/reset/:user_id', requireChurch('joincode.reset'), async (req, res) => {
+  try {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const joinCode = genCode();
+      try {
+        const [r] = await db.promise().query(updateJoinCode, [joinCode, req.church.id]);
+        if (!r.affectedRows) return notFound(res);
+        return res.json({ message: 'New join code created. The old one no longer works.', joinCode });
+      } catch (e) {
+        if (e.code !== 'ER_DUP_ENTRY') throw e;   // collision with another church: try again
+      }
+    }
+    return res.status(500).json({ error: 'Could not create a join code, please try again' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/:church_id/transfer/:user_id   { memberId, password }
+// Hands ownership to an ACTIVE member. Needs the owner's password. One owner at
+// all times: both role changes happen in one transaction with the church row locked.
+router.post('/:church_id/transfer/:user_id', requireChurch('church.transfer'), async (req, res) => {
+  const key = `u${req.user.id}`;
+  const wait = passwordMisses.locked(key);
+  if (wait) return bad(res, `Too many wrong passwords. Try again in ${waitText(wait)}.`, 429);
+
+  const memberId = Number(req.body.memberId);
+  const password = toStr(req.body.password);
+  if (!Number.isInteger(memberId) || memberId < 1) return bad(res, 'Choose the member to hand the church to');
+  if (!password) return bad(res, 'Enter your password to confirm', 400);
+
+  let conn;
+  try {
+    const [[u]] = await gateway.promise().query('SELECT password FROM users WHERE id=?', [req.user.id]);
+    const ok = u && await bcrypt.compare(password, u.password);
+    if (!ok) {
+      passwordMisses.miss(key);
+      return res.status(400).json({ error: 'Password is incorrect', fieldErrors: { password: 'Password is incorrect' } });
+    }
+    passwordMisses.clear(key);
+
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+    await conn.query('SELECT id FROM churches WHERE id=? FOR UPDATE', [req.church.id]);
+    // Re-check inside the lock: still the owner of an approved church?
+    const [me] = await conn.query(
+      `SELECT m.id FROM members m JOIN churches c ON c.id = m.church_id
+        WHERE m.church_id=? AND m.user_id=? AND m.role='owner' AND m.status='active' AND c.status='approved'`,
+      [req.church.id, req.user.id]);
+    const [target] = await conn.query(selectTransferTarget, [memberId, req.church.id]);
+    if (!me.length || !target.length || target[0].user_id === req.user.id) {
+      await conn.rollback();
+      return notFound(res);
+    }
+    await conn.query(setRole, ['member', me[0].id, req.church.id]);
+    await conn.query(setRole, ['owner', target[0].id, req.church.id]);
+    await conn.commit();
+    return res.json({ message: 'The church now belongs to the new owner. You are a regular member.' });
+  } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch { /* connection gone */ } }
+    return res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// POST /church/:church_id/library/share/:user_id   { share: true | false }
+// Opt-in, per person, per church. Off by default; leaving or removal switches it off.
+router.post('/:church_id/library/share/:user_id', requireChurch('library.share'), async (req, res) => {
+  const share = req.body.share === true || req.body.share === 1 || req.body.share === '1' || req.body.share === 'true' ? 1 : 0;
+  try {
+    await db.promise().query(setShareLibrary, [share, req.church.id, req.user.id]);
+    return res.json({
+      message: share ? 'Your books and movies are now listed in the church catalog.' : 'Your books and movies are no longer listed.',
+      shareLibrary: !!share,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /church/:church_id/library/:user_id
+// One entry per member who switched sharing on: display name, books and movies.
+// Only whitelisted columns are read (db/sql/church/library.js): no borrower names,
+// no pictures, no contacts, no ids, no emails. Contacts are never part of this.
+router.get('/:church_id/library/:user_id', requireChurch('library.view'), async (req, res) => {
+  try {
+    const [sharers] = await db.promise().query(selectSharingMembers, [req.church.id]);
+    const ids = sharers.map((r) => r.user_id);
+    if (!ids.length) return res.json({ results: [] });
+
+    const [users] = await gateway.promise().query('SELECT id, firstName, lastName FROM users WHERE id IN (?)', [ids]);
+    const names = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()]));
+    const [books] = await library.promise().query(selectSharedBooks, [ids]);
+    const [movies] = await library.promise().query(selectSharedMovies, [ids]);
+
+    const results = ids.filter((id) => names.has(id)).map((id) => ({
+      name: names.get(id),
+      isYou: id === req.user.id,
+      books: books.filter((b) => b.user_id === id).map((b) => ({
+        title: b.title,
+        author: b.author,
+        year: b.copywrite || undefined,
+        available: b.io === 1 && !b.lost,
+      })),
+      movies: movies.filter((m) => m.user_id === id).map((m) => {
+        const count = Math.min(Math.max(Number(m.numMovie) || 1, 1), 12);
+        const films = [];
+        for (let i = 1; i <= count; i++) {
+          if (m[`name${i}`]) films.push({ name: m[`name${i}`], available: m[`io${i}`] === 1 && !m.lost });
+        }
+        return {
+          name: m.name,
+          media: m.featureMedia || undefined,
+          available: m.io === 1 && !m.lost,
+          films,
+        };
+      }),
+    }));
+    return res.json({ results });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

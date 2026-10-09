@@ -10,9 +10,11 @@ const updateMission = `UPDATE churches SET missionStatement=? WHERE id=?`;
 // Every church the user is in (pending, active) with their role in it.
 const selectMyChurches =
   `SELECT c.id AS churchId, c.name, c.missionStatement, c.status AS churchStatus, c.joinCode,
-          m.role, m.status AS memberStatus
+          m.role, m.status AS memberStatus, m.shareLibrary
      FROM members m JOIN churches c ON c.id = m.church_id
     WHERE m.user_id=? AND m.status <> 'removed'
     ORDER BY c.name, c.id`;
 
-module.exports = { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches };
+const updateJoinCode = `UPDATE churches SET joinCode=? WHERE id=?`;
+
+module.exports = { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode };

@@ -593,6 +593,7 @@ function tableMap(names) {
           user_id   INT NOT NULL,
           role      ENUM('owner','member') NOT NULL DEFAULT 'member',
           status    ENUM('pending','active','removed') NOT NULL DEFAULT 'pending',
+          shareLibrary TINYINT(1) NOT NULL DEFAULT 0,
           createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uq_church_user (church_id, user_id),
           FOREIGN KEY (church_id) REFERENCES churches(id) ON DELETE CASCADE

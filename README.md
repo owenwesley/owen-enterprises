@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.22** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.23** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -311,7 +311,7 @@ Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A chur
 
 **What step 1 does:** a user requests a church (it starts *pending*; an admin approves it with a script) and becomes its owner. Other users join with the church's 8-character join code and wait for the owner to approve them. The owner approves or declines people, removes members and edits the mission statement. Members see the member list (display names only) and the mission statement. Nothing else is shared: joining a church exposes no one's library, health data or contact details.
 
-**Not in step 1 (planned, not built):** the library link (sharing books and movies, a church catalog, linked contacts), prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), ownership hand-over, a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
+**Step 2 (1.11.23) added** the library link (opt-in book and movie catalog; contacts are never shared), join-code reset, a wrong-code limit, ownership hand-over and a web page for church approval; see the 1.11.23 history entry. **Not built yet:** prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
 
 **Database `church`** (env `DB_CHURCH`, default `church`; the fifth database). `dbNames()` in `db/init.js` includes it, which is what makes `idRefs.js`, `rebuildTable.js`, `cleanOrphans.js` and `deleteUser.js` look inside it. Tables are named for what they hold:
 - `churches`: `id`, `name`, `missionStatement`, `joinCode` (8 characters, unique), `status` (`pending` / `approved` / `rejected` / `suspended`), `createdAt`.
@@ -343,7 +343,7 @@ Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A chur
 
 **Verified in the sandbox (MariaDB 10.11, Node 22):** an empty `church` database is filled by the server on start; `npm run check:church` 72 passed; `npm run check` 28 passed on a production-mode server (23 on a dev server); the weekly rebuild (`scheduleRebuild.js --now`) with church rows present renumbered `churches.id`, `members.id` and, through the users renumber, `members.user_id`, with `members.church_id` following and the cascade rule and unique key preserved; an upgrade that lacked `chkChurch` gained the column on start. **Not verified:** the Church page in a real browser or on a phone; MySQL 8; Windows.
 
-**Known edges:** a user can have only one church waiting for approval; no ownership hand-over; a removed person may ask to join again (the owner can decline again); the join code cannot be changed or revoked yet (delete and re-request, or ask for a code-reset feature); no rate limit on join attempts (the code is 8 characters from a 32-character alphabet); church names are not unique. Lawyer review (step E1) should cover church data, and prayers explicitly, before real congregations use it.
+**Known edges:** a user can have only one church waiting for approval; a removed person may ask to join again (the owner can decline again); church names are not unique; the join and password limits are in memory. Lawyer review (step E1) should cover church data, and prayers explicitly, before real congregations use it.
 
 ---
 
@@ -389,6 +389,16 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.23** — Church module, step 2: join-code reset, wrong-code limit, ownership hand-over, library sharing, web page for church approval.
+- **Join-code reset:** `POST /church/:church_id/joincode/reset/:user_id` (owner only). The old code stops working at once; members and waiting requests are untouched. Button "New join code" on the Overview tab.
+- **Wrong-code limit:** 5 wrong join codes per person per 15 minutes (and 50 per IP per hour) answer 429 "try again in N minutes", even with the right code; a right code clears the person's count. In memory (a restart clears it), `utils/attemptLimit.js`.
+- **Ownership hand-over:** `POST /church/:church_id/transfer/:user_id` `{ memberId, password }` (owner only; needs the owner's password; 5 wrong passwords lock it for 15 minutes). Only an ACTIVE member can be chosen. Both role changes happen in one transaction with the church row locked, so there is always exactly one owner. The former owner becomes a member and can leave or delete the account. Button "Hand over church" on the Members tab.
+- **Library sharing (opt-in):** new column `members.shareLibrary` (default 0; added to existing databases at start-up). `POST /church/:church_id/library/share/:user_id` `{ share }` and `GET /church/:church_id/library/:user_id` (any active member). The catalog lists, for each member who switched sharing on, book titles / authors and movie titles (with the film names of a set), each with In / Out. Only the columns in `db/sql/church/library.js` are read: no borrower names, pictures, contacts, ids or emails. Leaving, removal, rejecting or suspending a church switches sharing off. New "Library" tab on the Church page.
+- **Web page for church approval:** `GET /admin/churches`, `POST /admin/churches/:id/status`, `DELETE /admin/churches/:id` (`routes/adminChurches.js`, admin role only), shown as a "Churches" section at the bottom of the admin page (`pages/AdminChurchesSection.jsx`). `node db/approveChurch.js` still works.
+- **Permissions** added in `middleware/church.js`: `church.transfer`, `joincode.reset` (owner), `library.view`, `library.share` (owner and member).
+- **Tests:** `npm run check:church2` (`tests/church-step2.js`, 86 checks). `check:church` still 72, `check` 28.
+- **Not verified:** a real phone; MySQL 8 (sandbox is MariaDB 10.11); the wrong-code limit behind a proxy (it uses `req.ip`).
 
 **1.11.22** — insulin stock now follows typed doses.
 - **Fix:** `client/src/features/bgtracker/hooks/useReadings.js` deducted Slow / Fast insulin from the Medications table only when sliding scale was on (`carbRatio > 0`). With it off, typed doses never reduced stock. Deduction now runs whenever a dose changes, by the before/after difference: a re-save with no change takes nothing, lowering a dose gives the difference back, and clearing a dose to 0 now refunds it (it used to be skipped). Not retroactive. Sliding-scale users see no change.

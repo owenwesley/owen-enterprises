@@ -17,8 +17,8 @@
 const { church: db } = require('../db/db');
 
 const PERMISSIONS = {
-  owner:  ['church.view', 'church.edit', 'members.view', 'members.manage'],
-  member: ['church.view', 'members.view'],
+  owner:  ['church.view', 'church.edit', 'church.transfer', 'joincode.reset', 'members.view', 'members.manage', 'library.view', 'library.share'],
+  member: ['church.view', 'members.view', 'library.view', 'library.share'],
 };
 
 function requireChurch(permission) {

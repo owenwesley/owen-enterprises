@@ -233,4 +233,7 @@ router.post('/clinic-requests/:doctorId/reject', requireAdmin, async (req, res) 
   }
 });
 
+// Churches (the web version of db/approveChurch.js)
+router.use('/churches', require('./adminChurches'));
+
 module.exports = router;

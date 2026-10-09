@@ -15,6 +15,7 @@ import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Divider from '@mui/material/Divider';
 import { getFetch, postFetch, putFetch, deleteFetch } from '../utils/api';
+import AdminChurchesSection from './AdminChurchesSection';
 
 const sxStyles = {
   wrapper: {
@@ -386,6 +387,9 @@ export default function AdminDoctorsPage() {
             </Table>
           </TableContainer>
         )}
+
+        <Divider sx={{ my: 2 }} />
+        <AdminChurchesSection />
       </Paper>
     </div>
   );

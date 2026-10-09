@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { getFetch, postFetch } from '../../../utils/api';
 
-// Church module, step 1. State is local to the Church page (nothing else in the
+// Church module, steps 1 and 2. State is local to the Church page (nothing else in the
 // app needs it). postFetch resolves with the error body on failure, so every
 // action returns the response and the caller checks `res.error`. The shared
 // api utility already shows a toast for failed requests.
@@ -54,5 +54,31 @@ export function useChurch() {
     return res;
   }, [userId, loadChurches]);
 
-  return { churches, loaded, loadChurches, createChurch, joinChurch, getMembers, approveMember, removeMember, saveMission, leaveChurch };
+  const resetJoinCode = useCallback(async (churchId) => {
+    const res = await postFetch(`/church/${churchId}/joincode/reset/${userId}`, {});
+    await loadChurches();
+    return res;
+  }, [userId, loadChurches]);
+
+  const transferChurch = useCallback(async (churchId, memberId, password) => {
+    const res = await postFetch(`/church/${churchId}/transfer/${userId}`, { memberId, password });
+    await loadChurches();
+    return res;
+  }, [userId, loadChurches]);
+
+  const setShareLibrary = useCallback(async (churchId, share) => {
+    const res = await postFetch(`/church/${churchId}/library/share/${userId}`, { share });
+    await loadChurches();
+    return res;
+  }, [userId, loadChurches]);
+
+  const getCatalog = useCallback(async (churchId) => {
+    const data = await getFetch(`/church/${churchId}/library/${userId}`);
+    return data?.results || [];
+  }, [userId]);
+
+  return {
+    churches, loaded, loadChurches, createChurch, joinChurch, getMembers, approveMember, removeMember,
+    saveMission, leaveChurch, resetJoinCode, transferChurch, setShareLibrary, getCatalog,
+  };
 }

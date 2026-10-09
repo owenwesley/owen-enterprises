@@ -6,6 +6,8 @@ import TextField from '@mui/material/TextField';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Chip from '@mui/material/Chip';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import MenuItem from '@mui/material/MenuItem';
@@ -42,13 +44,17 @@ export default function ChurchPage() {
   const {
     churches, loaded, loadChurches, createChurch, joinChurch, getMembers,
     approveMember, removeMember, saveMission, leaveChurch,
+    resetJoinCode, transferChurch, setShareLibrary, getCatalog,
   } = useChurch();
 
   const [selectedId, setSelectedId] = useState(null);
   const [tab, setTab] = useState(0);
   const [members, setMembers] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [fMember, setFMember] = useState('');
+  const [fPassword, setFPassword] = useState('');
   const [msg, setMsg] = useState('');
-  const [dialog, setDialog] = useState(null);   // 'create' | 'join' | 'mission' | 'leave'
+  const [dialog, setDialog] = useState(null);   // 'create' | 'join' | 'mission' | 'leave' | 'resetCode' | 'transfer'
   const [fName, setFName] = useState('');
   const [fMission, setFMission] = useState('');
   const [fCode, setFCode] = useState('');
@@ -71,10 +77,16 @@ export default function ChurchPage() {
     else setMembers([]);
   }, [church, working, getMembers]);
 
+  const refreshCatalog = useCallback(async () => {
+    if (church && working) setCatalog(await getCatalog(church.churchId));
+    else setCatalog([]);
+  }, [church, working, getCatalog]);
+
   useEffect(() => { if (tab === 1) refreshMembers(); }, [tab, refreshMembers]);
+  useEffect(() => { if (tab === 2) refreshCatalog(); }, [tab, refreshCatalog]);
   useEffect(() => { setTab(0); }, [selectedId]);
 
-  const open = (name) => { setFName(''); setFMission(church && name === 'mission' ? church.missionStatement : ''); setFCode(''); setDialog(name); };
+  const open = (name) => { setFName(''); setFMission(church && name === 'mission' ? church.missionStatement : ''); setFCode(''); setFMember(''); setFPassword(''); setDialog(name); };
   const close = () => { if (!busy) setDialog(null); };
 
   // Runs an action; shows the server's message (or error) and closes the dialog on success.
@@ -91,6 +103,12 @@ export default function ChurchPage() {
   const onCreate = () => run(() => createChurch(fName.trim(), fMission.trim()), 'Church requested');
   const onJoin = () => run(() => joinChurch(fCode.trim()), 'Request sent');
   const onMission = () => run(() => saveMission(church.churchId, fMission.trim()), 'Saved');
+  const onResetCode = () => run(() => resetJoinCode(church.churchId), 'New join code created');
+  const onTransfer = () => run(() => transferChurch(church.churchId, Number(fMember), fPassword), 'Church handed over');
+  const onShare = async (checked) => {
+    const r = await setShareLibrary(church.churchId, checked);
+    if (r && !r.error) { setMsg(r.message); if (tab === 2) refreshCatalog(); }
+  };
   const onLeave = () => run(() => leaveChurch(church.churchId), 'You left the church');
 
   const onApprove = async (m) => { const r = await approveMember(church.churchId, m.memberId); if (r && !r.error) { setMsg(`${m.name} approved`); refreshMembers(); loadChurches(); } };
@@ -130,6 +148,7 @@ export default function ChurchPage() {
               <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ minHeight: '40px' }}>
                 <Tab label="Overview" sx={{ minHeight: '40px' }} />
                 <Tab label={church.pendingMembers ? `Members (${church.pendingMembers} waiting)` : 'Members'} sx={{ minHeight: '40px' }} />
+                <Tab label="Library" sx={{ minHeight: '40px' }} />
               </Tabs>
             )}
           </>
@@ -161,6 +180,7 @@ export default function ChurchPage() {
                 <Typography sx={sxStyles.code}>{church.joinCode}</Typography>
                 <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>
                   Give this code to the people you want to invite. They are not added until you approve them on the Members tab.
+                  If the code gets out, make a new one: the old code stops working at once.
                 </Typography>
               </Paper>
             )}
@@ -189,13 +209,61 @@ export default function ChurchPage() {
           </Paper>
         )}
 
+        {church && working && tab === 2 && (
+          <>
+            <Paper sx={sxStyles.card} elevation={2}>
+              <FormControlLabel
+                control={<Switch id="share-library" checked={!!church.shareLibrary} onChange={(e) => onShare(e.target.checked)} />}
+                label="List my books and movies for this church"
+                htmlFor="share-library"
+              />
+              <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>
+                Off by default. When on, members of this church can see the titles in your Community Library and whether each
+                is in or out. They never see who borrowed something, your pictures or your contacts. Leaving the church switches this off.
+              </Typography>
+            </Paper>
+            <Paper sx={sxStyles.card} elevation={2}>
+              {catalog.length === 0 && <Typography sx={{ color: '#666' }}>Nobody has listed their library yet.</Typography>}
+              {catalog.map((p) => (
+                <div key={p.name} style={{ marginBottom: '16px' }}>
+                  <Typography sx={{ fontWeight: 700, color: '#1a237e' }}>{p.name}{p.isYou ? ' (you)' : ''}</Typography>
+                  {p.books.length === 0 && p.movies.length === 0 && <Typography sx={{ color: '#666' }}>Nothing listed.</Typography>}
+                  {p.books.map((b, i) => (
+                    <div key={`b${i}`} style={sxStyles.row}>
+                      <Typography sx={{ flex: '1 1 auto', minWidth: 0 }}>{b.title}{b.author ? ` — ${b.author}` : ''}</Typography>
+                      <Chip size="small" label={b.available ? 'In' : 'Out'} color={b.available ? 'success' : 'default'} />
+                    </div>
+                  ))}
+                  {p.movies.map((m, i) => (
+                    <div key={`m${i}`} style={sxStyles.row}>
+                      <Typography sx={{ flex: '1 1 auto', minWidth: 0 }}>
+                        {m.name}{m.films.length > 1 ? ` (${m.films.map((f) => f.name).join(', ')})` : ''}
+                      </Typography>
+                      <Chip size="small" label={m.available ? 'In' : 'Out'} color={m.available ? 'success' : 'default'} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </Paper>
+          </>
+        )}
+
         {church && !working && startOrJoin}
       </div>
 
       {church && (
         <div style={sxStyles.foot}>
           {working && isOwner && tab === 0 && (
-            <Button variant="outlined" onClick={() => open('mission')}>Edit mission</Button>
+            <>
+              <Button variant="outlined" onClick={() => open('mission')}>Edit mission</Button>
+              <Button variant="outlined" onClick={() => open('resetCode')}>New join code</Button>
+            </>
+          )}
+          {working && isOwner && tab === 1 && (
+            <Button variant="outlined" onClick={() => open('transfer')}
+              disabled={!members.some((m) => m.role === 'member' && m.status === 'active')}>
+              Hand over church
+            </Button>
           )}
           {!isOwner && (
             <Button color="error" onClick={() => setDialog('leave')}>
@@ -261,6 +329,39 @@ export default function ChurchPage() {
         <DialogActions>
           <Button onClick={close} disabled={busy}>Stay</Button>
           <Button onClick={onLeave} disabled={busy} color="error" variant="contained">{working ? 'Leave' : 'Withdraw'}</Button>
+        </DialogActions>
+      </FitDialog>
+
+      <FitDialog open={dialog === 'resetCode'} onClose={close} maxWidth="xs">
+        <DialogTitle>Make a new join code?</DialogTitle>
+        <FitContent>
+          <DialogContentText>
+            The old code stops working at once. People already in the church, and requests already waiting, are not affected.
+          </DialogContentText>
+        </FitContent>
+        <DialogActions>
+          <Button onClick={close} disabled={busy}>Cancel</Button>
+          <Button onClick={onResetCode} disabled={busy} variant="contained" sx={sxStyles.primary}>Make new code</Button>
+        </DialogActions>
+      </FitDialog>
+
+      <FitDialog open={dialog === 'transfer'} onClose={close} maxWidth="xs">
+        <DialogTitle>Hand the church to someone else</DialogTitle>
+        <FitContent>
+          <DialogContentText sx={{ marginBottom: '8px' }}>
+            The person you pick becomes the owner. You become a regular member and can leave later. Only an active member can be chosen.
+          </DialogContentText>
+          <TextField select fullWidth margin="dense" label="New owner" value={fMember} onChange={(e) => setFMember(e.target.value)}>
+            {members.filter((m) => m.role === 'member' && m.status === 'active').map((m) => (
+              <MenuItem key={m.memberId} value={m.memberId}>{m.name}</MenuItem>
+            ))}
+          </TextField>
+          <TextField fullWidth margin="dense" type="password" label="Your password" value={fPassword}
+            onChange={(e) => setFPassword(e.target.value)} autoComplete="current-password" />
+        </FitContent>
+        <DialogActions>
+          <Button onClick={close} disabled={busy}>Cancel</Button>
+          <Button onClick={onTransfer} disabled={busy || !fMember || !fPassword} variant="contained" color="error">Hand over</Button>
         </DialogActions>
       </FitDialog>
 
