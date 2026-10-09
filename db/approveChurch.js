@@ -79,7 +79,7 @@ async function main() {
     let removed = 0;
     if (action === 'reject' || action === 'suspend') {
       const [r] = await conn.query(
-        `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND role='member' AND status<>'removed'`, [id]);
+        `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND role<>'owner' AND status<>'removed'`, [id]);
       removed = r.affectedRows;
       await conn.query(`UPDATE members SET shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=?`, [id]);
     }

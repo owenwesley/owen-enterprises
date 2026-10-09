@@ -13,8 +13,11 @@ const approveMember = `UPDATE members SET status='active' WHERE id=? AND church_
 // Leaving or being removed always switches library sharing off (step 2).
 const removeMember =
   `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE id=? AND church_id=? AND role='member' AND status IN ('pending','active')`;
+// The owner may remove anyone except the owner (leaders, treasurer, mission leaders too).
+const removeAnyMember =
+  `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE id=? AND church_id=? AND role<>'owner' AND status IN ('pending','active')`;
 const leaveChurch =
-  `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND user_id=? AND role='member' AND status IN ('pending','active')`;
+  `UPDATE members SET status='removed', shareLibrary=0, shareContact=0, contactPhone='', contactAddress='' WHERE church_id=? AND user_id=? AND role<>'owner' AND status IN ('pending','active')`;
 // Step 2: library sharing, ownership hand-over.
 const setShareLibrary =
   `UPDATE members SET shareLibrary=? WHERE church_id=? AND user_id=? AND status='active'`;
@@ -28,17 +31,19 @@ const setShareContact =
 const selectContactSharers =
   `SELECT m.id AS memberId, m.user_id, c.name AS churchName, m.contactPhone, m.contactAddress
      FROM members m
-     JOIN churches c ON c.id = m.church_id AND c.status='approved'
+     JOIN churches c ON c.id = m.church_id AND c.status='approved' AND c.areaContacts=1
     WHERE m.status='active' AND m.shareContact=1 AND m.user_id <> ?
       AND m.church_id IN (SELECT mm.church_id FROM members mm WHERE mm.user_id=? AND mm.status='active')
     ORDER BY c.name, m.id`;
 const selectTransferTarget =
-  `SELECT id, user_id FROM members WHERE id=? AND church_id=? AND role='member' AND status='active'`;
+  `SELECT id, user_id FROM members WHERE id=? AND church_id=? AND role<>'owner' AND status='active'`;
 const setRole = `UPDATE members SET role=? WHERE id=? AND church_id=?`;
+// Step 3 (roles): the owner gives an ACTIVE non-owner member a role.
+const selectRoleTarget = `SELECT id, user_id, role FROM members WHERE id=? AND church_id=? AND role<>'owner' AND status='active'`;
 const countPendingMembers = `SELECT COUNT(*) AS n FROM members WHERE church_id=? AND status='pending'`;
 
 module.exports = {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
-  approveMember, removeMember, leaveChurch, countPendingMembers,
+  approveMember, removeMember, removeAnyMember, leaveChurch, countPendingMembers, selectRoleTarget,
   setShareLibrary, selectSharingMembers, setShareContact, selectContactSharers, selectTransferTarget, setRole,
 };

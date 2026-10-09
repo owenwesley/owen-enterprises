@@ -40,17 +40,25 @@ const STATUS_TEXT = {
   suspended: 'This church is suspended.',
 };
 
+const ROLE_LABEL = { owner: 'Owner', leader: 'Leader', treasurer: 'Treasurer', missions: 'Mission leader', member: 'Member' };
+const ROLE_CHOICES = ['member', 'leader', 'treasurer', 'missions'];
+
 export default function ChurchPage() {
   const {
     churches, loaded, loadChurches, createChurch, joinChurch, getMembers,
     approveMember, removeMember, saveMission, leaveChurch,
     resetJoinCode, transferChurch, setShareLibrary, setShareContact, getCatalog,
+    getAnnouncements, postAnnouncement, editAnnouncement, deleteAnnouncement, setRole, setAreas,
   } = useChurch();
 
   const [selectedId, setSelectedId] = useState(null);
   const [tab, setTab] = useState(0);
   const [members, setMembers] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [news, setNews] = useState([]);
+  const [fTitle, setFTitle] = useState('');
+  const [fBody, setFBody] = useState('');
+  const [editing, setEditing] = useState(null);   // announcement being edited, or null for a new one
   const [fMember, setFMember] = useState('');
   const [fPassword, setFPassword] = useState('');
   const [msg, setMsg] = useState('');
@@ -73,6 +81,10 @@ export default function ChurchPage() {
   const church = churches.find((c) => c.churchId === selectedId) || null;
   const isOwner = !!church && church.role === 'owner';
   const working = !!church && church.churchStatus === 'approved' && church.memberStatus === 'active';
+  // What this person may do comes from the server (church.permissions), never from the role name.
+  const can = (p) => !!church && (church.permissions || []).includes(p);
+  const areas = (church && church.areas) || { announcements: true, library: true, contacts: true };
+  const closedNote = <Typography sx={{ color: '#666' }}>The church owner has turned this off.</Typography>;
 
   const refreshMembers = useCallback(async () => {
     if (church && working) setMembers(await getMembers(church.churchId));
@@ -84,8 +96,15 @@ export default function ChurchPage() {
     else setCatalog([]);
   }, [church, working, getCatalog]);
 
-  useEffect(() => { if (tab === 1) refreshMembers(); }, [tab, refreshMembers]);
-  useEffect(() => { if (tab === 2) refreshCatalog(); }, [tab, refreshCatalog]);
+  const refreshNews = useCallback(async () => {
+    if (church && working) setNews(await getAnnouncements(church.churchId));
+    else setNews([]);
+  }, [church, working, getAnnouncements]);
+
+  // Tabs: 0 Overview, 1 Announcements, 2 Members, 3 Sharing.
+  useEffect(() => { if (tab === 1) refreshNews(); }, [tab, refreshNews]);
+  useEffect(() => { if (tab === 2) refreshMembers(); }, [tab, refreshMembers]);
+  useEffect(() => { if (tab === 3) refreshCatalog(); }, [tab, refreshCatalog]);
   useEffect(() => { setTab(0); }, [selectedId]);
   // Fill the contact fields from what the server holds whenever the church (or its saved values) changes.
   useEffect(() => {
@@ -93,7 +112,7 @@ export default function ChurchPage() {
     setCAddress(church ? church.contactAddress || '' : '');
   }, [church && church.churchId, church && church.contactPhone, church && church.contactAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const open = (name) => { setFName(''); setFMission(church && name === 'mission' ? church.missionStatement : ''); setFCode(''); setFMember(''); setFPassword(''); setDialog(name); };
+  const open = (name) => { setFTitle(''); setFBody(''); setEditing(null); setFName(''); setFMission(church && name === 'mission' ? church.missionStatement : ''); setFCode(''); setFMember(''); setFPassword(''); setDialog(name); };
   const close = () => { if (!busy) setDialog(null); };
 
   // Runs an action; shows the server's message (or error) and closes the dialog on success.
@@ -114,11 +133,33 @@ export default function ChurchPage() {
   const onTransfer = () => run(() => transferChurch(church.churchId, Number(fMember), fPassword), 'Church handed over');
   const onShare = async (checked) => {
     const r = await setShareLibrary(church.churchId, checked);
-    if (r && !r.error) { setMsg(r.message); if (tab === 2) refreshCatalog(); }
+    if (r && !r.error) { setMsg(r.message); if (tab === 3) refreshCatalog(); }
   };
   const onShareContact = async (share) => {
     const r = await setShareContact(church.churchId, share, cPhone.trim(), cAddress.trim());
     if (r && !r.error) setMsg(r.message);
+  };
+  const openNews = (a) => {
+    setFName(''); setFMission(''); setFCode(''); setFMember(''); setFPassword('');
+    setEditing(a || null); setFTitle(a ? a.title : ''); setFBody(a ? a.body : ''); setDialog('news');
+  };
+  const onSaveNews = async () => {
+    const ok = await run(() => (editing
+      ? editAnnouncement(church.churchId, editing.announcementId, fTitle.trim(), fBody.trim())
+      : postAnnouncement(church.churchId, fTitle.trim(), fBody.trim())), 'Saved');
+    if (ok) refreshNews();
+  };
+  const onDeleteNews = async (a) => {
+    const r = await deleteAnnouncement(church.churchId, a.announcementId);
+    if (r && !r.error) { setMsg(r.message); refreshNews(); }
+  };
+  const onRole = async (m, role) => {
+    const r = await setRole(church.churchId, m.memberId, role);
+    if (r && !r.error) { setMsg(`${m.name}: ${ROLE_LABEL[role]}`); refreshMembers(); }
+  };
+  const onArea = async (key, on) => {
+    const r = await setAreas(church.churchId, { [key]: on });
+    if (r && !r.error) { setMsg(r.message); if (tab === 3) refreshCatalog(); }
   };
   const onLeave = () => run(() => leaveChurch(church.churchId), 'You left the church');
 
@@ -158,6 +199,7 @@ export default function ChurchPage() {
             {working && (
               <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ minHeight: '40px' }}>
                 <Tab label="Overview" sx={{ minHeight: '40px' }} />
+                <Tab label="Announcements" sx={{ minHeight: '40px' }} />
                 <Tab label={church.pendingMembers ? `Members (${church.pendingMembers} waiting)` : 'Members'} sx={{ minHeight: '40px' }} />
                 <Tab label="Sharing" sx={{ minHeight: '40px' }} />
               </Tabs>
@@ -200,6 +242,32 @@ export default function ChurchPage() {
         )}
 
         {church && working && tab === 1 && (
+          <>
+            {!areas.announcements && <Paper sx={sxStyles.card} elevation={2}>{closedNote}</Paper>}
+            {areas.announcements && news.length === 0 && (
+              <Paper sx={sxStyles.card} elevation={2}>
+                <Typography sx={{ color: '#666' }}>No announcements yet.</Typography>
+              </Paper>
+            )}
+            {areas.announcements && news.map((a) => (
+              <Paper key={a.announcementId} sx={sxStyles.card} elevation={2}>
+                <Typography sx={{ fontWeight: 700, color: '#1a237e' }}>{a.title}</Typography>
+                <Typography sx={{ color: '#666', fontSize: '0.8rem' }}>
+                  {a.author} · {new Date(a.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}{a.edited ? ' (edited)' : ''}
+                </Typography>
+                {a.body && <Typography sx={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{a.body}</Typography>}
+                {can('announcements.post') && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <Button size="small" onClick={() => openNews(a)}>Edit</Button>
+                    <Button size="small" color="error" onClick={() => onDeleteNews(a)}>Delete</Button>
+                  </div>
+                )}
+              </Paper>
+            ))}
+          </>
+        )}
+
+        {church && working && tab === 2 && (
           <Paper sx={sxStyles.card} elevation={2}>
             {members.length === 0 && <Typography sx={{ color: '#666' }}>No members to show.</Typography>}
             {members.map((m) => (
@@ -208,11 +276,18 @@ export default function ChurchPage() {
                   {m.name}{m.isYou ? ' (you)' : ''}
                 </Typography>
                 {m.role === 'owner' && <Chip size="small" label="Owner" color="primary" />}
+                {m.role !== 'owner' && m.role !== 'member' && !can('members.roles') && <Chip size="small" label={ROLE_LABEL[m.role] || m.role} color="secondary" />}
+                {can('members.roles') && m.role !== 'owner' && m.status === 'active' && !m.isYou && (
+                  <TextField select size="small" value={m.role} onChange={(e) => onRole(m, e.target.value)}
+                    sx={{ minWidth: '130px' }} inputProps={{ 'aria-label': `Role for ${m.name}` }}>
+                    {ROLE_CHOICES.map((r) => <MenuItem key={r} value={r}>{ROLE_LABEL[r]}</MenuItem>)}
+                  </TextField>
+                )}
                 {m.status === 'pending' && <Chip size="small" label="Waiting" color="warning" />}
-                {isOwner && m.status === 'pending' && (
+                {can('members.manage') && m.status === 'pending' && (
                   <Button size="small" variant="contained" sx={sxStyles.primary} onClick={() => onApprove(m)}>Approve</Button>
                 )}
-                {isOwner && m.role === 'member' && (
+                {can('members.manage') && (isOwner ? m.role !== 'owner' : m.role === 'member') && (
                   <Button size="small" color="error" onClick={() => onRemove(m)}>{m.status === 'pending' ? 'Decline' : 'Remove'}</Button>
                 )}
               </div>
@@ -220,9 +295,29 @@ export default function ChurchPage() {
           </Paper>
         )}
 
-        {church && working && tab === 2 && (
+        {church && working && tab === 3 && (
           <>
+            {isOwner && (
+              <Paper sx={sxStyles.card} elevation={2}>
+                <Typography sx={sxStyles.label}>Church areas (owner)</Typography>
+                <Typography sx={{ color: '#666', fontSize: '0.85rem', marginBottom: '4px' }}>
+                  Turn an area off to close it for everyone in this church, you included. Turning off Library or Contacts also
+                  switches every member's sharing off and erases the phone numbers and addresses; turning it on again shares nothing until each person opts in.
+                  Announcements are only hidden, not deleted.
+                </Typography>
+                {[['announcements', 'Announcements'], ['library', 'Library'], ['contacts', 'Contacts']].map(([k, label]) => (
+                  <div key={k}>
+                    <FormControlLabel
+                      control={<Switch id={`area-${k}`} checked={!!areas[k]} onChange={(e) => onArea(k, e.target.checked)} />}
+                      label={label}
+                      htmlFor={`area-${k}`}
+                    />
+                  </div>
+                ))}
+              </Paper>
+            )}
             <Paper sx={sxStyles.card} elevation={2}>
+              {!areas.contacts ? closedNote : (<>
               <FormControlLabel
                 control={<Switch id="share-contact" checked={!!church.shareContact} onChange={(e) => onShareContact(e.target.checked)} />}
                 label="Share my contact info with this church"
@@ -240,8 +335,10 @@ export default function ChurchPage() {
                   <Button variant="outlined" onClick={() => onShareContact(true)}>Save</Button>
                 )}
               </div>
+              </>)}
             </Paper>
             <Paper sx={sxStyles.card} elevation={2}>
+              {!areas.library ? closedNote : (<>
               <FormControlLabel
                 control={<Switch id="share-library" checked={!!church.shareLibrary} onChange={(e) => onShare(e.target.checked)} />}
                 label="List my books and movies for this church"
@@ -251,8 +348,9 @@ export default function ChurchPage() {
                 Off by default. When on, members of this church can see the titles in your Community Library and whether each
                 is in or out. They never see who borrowed something, your pictures or your contacts. Leaving the church switches this off.
               </Typography>
+              </>)}
             </Paper>
-            <Paper sx={sxStyles.card} elevation={2}>
+            {areas.library && <Paper sx={sxStyles.card} elevation={2}>
               {catalog.length === 0 && <Typography sx={{ color: '#666' }}>Nobody has listed their library yet.</Typography>}
               {catalog.map((p) => (
                 <div key={p.name} style={{ marginBottom: '16px' }}>
@@ -274,7 +372,7 @@ export default function ChurchPage() {
                   ))}
                 </div>
               ))}
-            </Paper>
+            </Paper>}
           </>
         )}
 
@@ -289,9 +387,12 @@ export default function ChurchPage() {
               <Button variant="outlined" onClick={() => open('resetCode')}>New join code</Button>
             </>
           )}
-          {working && isOwner && tab === 1 && (
+          {working && can('announcements.post') && areas.announcements && tab === 1 && (
+            <Button variant="contained" sx={sxStyles.primary} onClick={() => openNews(null)}>New announcement</Button>
+          )}
+          {working && isOwner && tab === 2 && (
             <Button variant="outlined" onClick={() => open('transfer')}
-              disabled={!members.some((m) => m.role === 'member' && m.status === 'active')}>
+              disabled={!members.some((m) => m.role !== 'owner' && m.status === 'active')}>
               Hand over church
             </Button>
           )}
@@ -347,6 +448,23 @@ export default function ChurchPage() {
         </DialogActions>
       </FitDialog>
 
+      <FitDialog open={dialog === 'news'} onClose={close} maxWidth="sm">
+        <DialogTitle>{editing ? 'Edit announcement' : 'New announcement'}</DialogTitle>
+        <FitContent>
+          <TextField fullWidth autoFocus margin="dense" label="Title" value={fTitle}
+            onChange={(e) => setFTitle(e.target.value)} inputProps={{ maxLength: 150 }} />
+          <TextField fullWidth multiline minRows={4} maxRows={10} margin="dense" label="Message (optional)" value={fBody}
+            onChange={(e) => setFBody(e.target.value)} inputProps={{ maxLength: 4000 }} />
+          <DialogContentText sx={{ fontSize: '0.85rem' }}>
+            Every active member of this church can read this. Do not post health or other private details about anyone.
+          </DialogContentText>
+        </FitContent>
+        <DialogActions>
+          <Button onClick={close} disabled={busy}>Cancel</Button>
+          <Button onClick={onSaveNews} disabled={busy || !fTitle.trim()} variant="contained" sx={sxStyles.primary}>{editing ? 'Save' : 'Post'}</Button>
+        </DialogActions>
+      </FitDialog>
+
       <FitDialog open={dialog === 'leave'} onClose={close} maxWidth="xs">
         <DialogTitle>{working ? 'Leave this church?' : 'Withdraw your request?'}</DialogTitle>
         <FitContent>
@@ -382,7 +500,7 @@ export default function ChurchPage() {
             The person you pick becomes the owner. You become a regular member and can leave later. Only an active member can be chosen.
           </DialogContentText>
           <TextField select fullWidth margin="dense" label="New owner" value={fMember} onChange={(e) => setFMember(e.target.value)}>
-            {members.filter((m) => m.role === 'member' && m.status === 'active').map((m) => (
+            {members.filter((m) => m.role !== 'owner' && m.status === 'active').map((m) => (
               <MenuItem key={m.memberId} value={m.memberId}>{m.name}</MenuItem>
             ))}
           </TextField>

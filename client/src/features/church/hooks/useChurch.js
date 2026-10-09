@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAppContext } from '../../../context/AppContext';
 import { getFetch, postFetch } from '../../../utils/api';
 
-// Church module, steps 1 and 2. State is local to the Church page (nothing else in the
+// Church module, steps 1 to 3. State is local to the Church page (nothing else in the
 // app needs it). postFetch resolves with the error body on failure, so every
 // action returns the response and the caller checks `res.error`. The shared
 // api utility already shows a toast for failed requests.
@@ -78,13 +78,37 @@ export function useChurch() {
     return res;
   }, [userId, loadChurches]);
 
+  const setRole = useCallback(async (churchId, memberId, role) =>
+    postFetch(`/church/${churchId}/members/role/${userId}`, { memberId, role }), [userId]);
+
+  const setAreas = useCallback(async (churchId, areas) => {
+    const res = await postFetch(`/church/${churchId}/areas/${userId}`, areas);
+    await loadChurches();
+    return res;
+  }, [userId, loadChurches]);
+
   const getCatalog = useCallback(async (churchId) => {
     const data = await getFetch(`/church/${churchId}/library/${userId}`);
     return data?.results || [];
   }, [userId]);
 
+  const getAnnouncements = useCallback(async (churchId) => {
+    const data = await getFetch(`/church/${churchId}/announcements/${userId}`);
+    return data?.results || [];
+  }, [userId]);
+
+  const postAnnouncement = useCallback((churchId, title, body) =>
+    postFetch(`/church/${churchId}/announcements/post/${userId}`, { title, body }), [userId]);
+
+  const editAnnouncement = useCallback((churchId, announcementId, title, body) =>
+    postFetch(`/church/${churchId}/announcements/edit/${userId}`, { announcementId, title, body }), [userId]);
+
+  const deleteAnnouncement = useCallback((churchId, announcementId) =>
+    postFetch(`/church/${churchId}/announcements/delete/${userId}`, { announcementId }), [userId]);
+
   return {
     churches, loaded, loadChurches, createChurch, joinChurch, getMembers, approveMember, removeMember,
     saveMission, leaveChurch, resetJoinCode, transferChurch, setShareLibrary, setShareContact, getCatalog,
+    getAnnouncements, postAnnouncement, editAnnouncement, deleteAnnouncement, setRole, setAreas,
   };
 }

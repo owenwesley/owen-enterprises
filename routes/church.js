@@ -26,6 +26,22 @@
  *   GET  /church/contacts/:user_id                    church members who shared their contact info
  *   POST /church/:church_id/contact/share/:user_id    contact.share   { share, phone, address }
  *
+ * Step 3 (announcements):
+ *   GET  /church/:church_id/announcements/:user_id            announcements.view  newest first (max 100)
+ *   POST /church/:church_id/announcements/post/:user_id       announcements.post  { title, body }
+ *   POST /church/:church_id/announcements/edit/:user_id       announcements.post  { announcementId, title, body }
+ *   POST /church/:church_id/announcements/delete/:user_id     announcements.post  { announcementId }
+ * Only active members of an approved church can read them; leaving, removal or suspension closes
+ * access at once (same check as every other church route). The author is shown by display name only.
+ *
+ * Step 3 (roles and area switches):
+ *   POST /church/:church_id/members/role/:user_id     members.roles   { memberId, role }  (owner only)
+ *   POST /church/:church_id/areas/:user_id            areas.manage    { announcements?, library?, contacts? }  (owner only)
+ * Roles: owner, leader (posts announcements, approves / removes ordinary members), treasurer and
+ * mission leader (labels only for now), member. Permissions live in middleware/church.js.
+ * An area switched off closes that area for EVERY member at once, on the server (library and contact
+ * sharing are also switched off for everyone and the phone / address erased; announcements are kept hidden).
+ *
  * The member list shows display names only. A member's name and ACCOUNT email, plus a phone and
  * address typed for this purpose, are shown to members of the same church ONLY when that member
  * switched contact sharing on (off by default). Sharing is switched off and phone/address erased
@@ -35,17 +51,18 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { church: db, owenenterprises: gateway, communitylibrary: library } = require('../db/db');
 const { makeLimiter } = require('../utils/attemptLimit');
-const { requireChurch } = require('../middleware/church');
+const { requireChurch, PERMISSIONS, ASSIGNABLE_ROLES } = require('../middleware/church');
 const { genCode } = require('../db/backfillInviteCodes');
 const { toStr } = require('../utils/coerce');
-const { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode } = require('../db/sql/church/churches');
+const { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode, AREA_COLUMNS, updateArea } = require('../db/sql/church/churches');
 const {
   insertMember, selectMembership, selectChurchMembers, rerequestMember,
-  approveMember, removeMember, leaveChurch, countPendingMembers,
+  approveMember, removeMember, removeAnyMember, leaveChurch, countPendingMembers, selectRoleTarget,
   setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
   setShareContact, selectContactSharers,
 } = require('../db/sql/church/members');
 const { selectSharedBooks, selectSharedMovies } = require('../db/sql/church/library');
+const { selectAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement } = require('../db/sql/church/announcements');
 
 const router = express.Router();
 const NAME_MAX = 150;
@@ -81,6 +98,9 @@ router.get('/mine/:user_id', async (req, res) => {
         missionStatement: r.missionStatement,
         churchStatus: r.churchStatus,
         role: r.role,
+        // What this person may do here, so the page never has to guess from the role name.
+        permissions: r.memberStatus === 'active' && r.churchStatus === 'approved' ? (PERMISSIONS[r.role] || []) : [],
+        areas: { announcements: !!r.areaAnnouncements, library: !!r.areaLibrary, contacts: !!r.areaContacts },
         memberStatus: r.memberStatus,
         // The join code is shown to the owner of a working church only.
         joinCode: isOwner && live ? r.joinCode : undefined,
@@ -176,10 +196,10 @@ router.post('/join/:user_id', async (req, res) => {
 // GET /church/:church_id/members/:user_id
 router.get('/:church_id/members/:user_id', requireChurch('members.view'), async (req, res) => {
   try {
-    const isOwner = req.church.role === 'owner';
+    const canManage = (PERMISSIONS[req.church.role] || []).includes('members.manage');
     const [rows] = await db.promise().query(selectChurchMembers, [req.church.id]);
-    // Only the owner sees people who are still waiting.
-    const visible = rows.filter((r) => isOwner || r.status === 'active');
+    // Only the owner and leaders see people who are still waiting.
+    const visible = rows.filter((r) => canManage || r.status === 'active');
     const ids = [...new Set(visible.map((r) => r.user_id))];
     const names = new Map();
     if (ids.length) {
@@ -215,7 +235,9 @@ router.post('/:church_id/members/approve/:user_id', requireChurch('members.manag
 // POST /church/:church_id/members/remove/:user_id   { memberId }
 router.post('/:church_id/members/remove/:user_id', requireChurch('members.manage'), async (req, res) => {
   try {
-    const [r] = await db.promise().query(removeMember, [Number(req.body.memberId), req.church.id]);
+    // The owner may remove anyone but the owner; a leader only ordinary members (never another leader or role holder).
+    const sql = req.church.role === 'owner' ? removeAnyMember : removeMember;
+    const [r] = await db.promise().query(sql, [Number(req.body.memberId), req.church.id]);
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Member removed' });
   } catch (err) {
@@ -322,6 +344,44 @@ router.post('/:church_id/transfer/:user_id', requireChurch('church.transfer'), a
     return res.status(500).json({ error: err.message });
   } finally {
     if (conn) conn.release();
+  }
+});
+
+// POST /church/:church_id/members/role/:user_id   { memberId, role }   owner only
+router.post('/:church_id/members/role/:user_id', requireChurch('members.roles'), async (req, res) => {
+  const memberId = Number(req.body.memberId);
+  const role = clean(req.body.role);
+  if (!Number.isInteger(memberId) || memberId < 1) return bad(res, 'Choose a member');
+  if (!ASSIGNABLE_ROLES.includes(role)) return bad(res, 'Unknown role');
+  try {
+    const [t] = await db.promise().query(selectRoleTarget, [memberId, req.church.id]);
+    if (!t.length || t[0].user_id === req.user.id) return notFound(res);
+    await db.promise().query(setRole, [role, memberId, req.church.id]);
+    return res.json({ message: 'Role saved', role });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+const asFlag = (v) => (v === true || v === 1 || v === '1' || v === 'true' ? 1 : 0);
+
+// POST /church/:church_id/areas/:user_id   { announcements?, library?, contacts? }   owner only
+// Only the keys sent are changed. Switching library or contacts off also switches every member's
+// sharing off and erases the stored phone / address, so switching it back on shares nothing until
+// each person opts in again. Announcements are only hidden (nothing is deleted).
+router.post('/:church_id/areas/:user_id', requireChurch('areas.manage'), async (req, res) => {
+  const keys = Object.keys(AREA_COLUMNS).filter((k) => req.body[k] !== undefined);
+  if (!keys.length) return bad(res, 'Nothing to change');
+  try {
+    for (const k of keys) {
+      const on = asFlag(req.body[k]);
+      await db.promise().query(updateArea(k), [on, req.church.id]);
+      if (!on && k === 'library') await db.promise().query('UPDATE members SET shareLibrary=0 WHERE church_id=?', [req.church.id]);
+      if (!on && k === 'contacts') await db.promise().query("UPDATE members SET shareContact=0, contactPhone='', contactAddress='' WHERE church_id=?", [req.church.id]);
+    }
+    return res.json({ message: 'Saved' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -436,6 +496,79 @@ router.get('/contacts/:user_id', async (req, res) => {
       .map(({ churches, ...rest }) => rest)
       .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
     return res.json({ results });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Announcements ──────────────────────────────────────────────────────────────
+const TITLE_MAX = 150;
+const BODY_MAX = 4000;
+
+// GET /church/:church_id/announcements/:user_id
+router.get('/:church_id/announcements/:user_id', requireChurch('announcements.view'), async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(selectAnnouncements, [req.church.id]);
+    const ids = [...new Set(rows.map((r) => r.user_id))];
+    const names = new Map();
+    if (ids.length) {
+      const [users] = await gateway.promise().query('SELECT id, firstName, lastName FROM users WHERE id IN (?)', [ids]);
+      for (const u of users) names.set(u.id, `${u.firstName} ${u.lastName}`.trim());
+    }
+    const results = rows.map((r) => ({
+      announcementId: r.id,
+      title: r.title,
+      body: r.body,
+      author: names.get(r.user_id) || 'Former member',
+      createdAt: r.createdAt,
+      edited: new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime() > 1000,
+    }));
+    return res.json({ results });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+function readAnnouncement(req, res) {
+  const title = clean(req.body.title);
+  const body = clean(req.body.body);
+  if (!title) { bad(res, 'A title is required'); return null; }
+  if (title.length > TITLE_MAX) { bad(res, `Title must be ${TITLE_MAX} characters or fewer`); return null; }
+  if (body.length > BODY_MAX) { bad(res, `Message must be ${BODY_MAX} characters or fewer`); return null; }
+  return { title, body };
+}
+
+// POST /church/:church_id/announcements/post/:user_id   { title, body }
+router.post('/:church_id/announcements/post/:user_id', requireChurch('announcements.post'), async (req, res) => {
+  const a = readAnnouncement(req, res);
+  if (!a) return undefined;
+  try {
+    const [r] = await db.promise().query(insertAnnouncement, [req.church.id, req.user.id, a.title, a.body]);
+    return res.status(201).json({ message: 'Announcement posted', announcementId: r.insertId });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/:church_id/announcements/edit/:user_id   { announcementId, title, body }
+router.post('/:church_id/announcements/edit/:user_id', requireChurch('announcements.post'), async (req, res) => {
+  const a = readAnnouncement(req, res);
+  if (!a) return undefined;
+  try {
+    const [r] = await db.promise().query(updateAnnouncement, [a.title, a.body, Number(req.body.announcementId), req.church.id]);
+    if (!r.affectedRows) return notFound(res);
+    return res.json({ message: 'Announcement saved' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/:church_id/announcements/delete/:user_id   { announcementId }
+router.post('/:church_id/announcements/delete/:user_id', requireChurch('announcements.post'), async (req, res) => {
+  try {
+    const [r] = await db.promise().query(deleteAnnouncement, [Number(req.body.announcementId), req.church.id]);
+    if (!r.affectedRows) return notFound(res);
+    return res.json({ message: 'Announcement deleted' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

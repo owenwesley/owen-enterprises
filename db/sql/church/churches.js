@@ -10,6 +10,7 @@ const updateMission = `UPDATE churches SET missionStatement=? WHERE id=?`;
 // Every church the user is in (pending, active) with their role in it.
 const selectMyChurches =
   `SELECT c.id AS churchId, c.name, c.missionStatement, c.status AS churchStatus, c.joinCode,
+          c.areaAnnouncements, c.areaLibrary, c.areaContacts,
           m.role, m.status AS memberStatus, m.shareLibrary, m.shareContact, m.contactPhone, m.contactAddress
      FROM members m JOIN churches c ON c.id = m.church_id
     WHERE m.user_id=? AND m.status <> 'removed'
@@ -17,4 +18,8 @@ const selectMyChurches =
 
 const updateJoinCode = `UPDATE churches SET joinCode=? WHERE id=?`;
 
-module.exports = { insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode };
+// Step 3 (area switches). Column names come from this fixed list, never from the request.
+const AREA_COLUMNS = { announcements: 'areaAnnouncements', library: 'areaLibrary', contacts: 'areaContacts' };
+const updateArea = (key) => `UPDATE churches SET ${AREA_COLUMNS[key]}=? WHERE id=?`;
+
+module.exports = { AREA_COLUMNS, updateArea, insertChurch, selectChurchByJoinCode, updateMission, selectMyChurches, updateJoinCode };

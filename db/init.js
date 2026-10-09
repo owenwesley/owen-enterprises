@@ -582,6 +582,9 @@ function tableMap(names) {
           missionStatement VARCHAR(2000) NOT NULL DEFAULT '',
           joinCode         VARCHAR(8)    NOT NULL UNIQUE,
           status           ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'pending',
+          areaAnnouncements TINYINT(1)    NOT NULL DEFAULT 1,
+          areaLibrary       TINYINT(1)    NOT NULL DEFAULT 1,
+          areaContacts      TINYINT(1)    NOT NULL DEFAULT 1,
           createdAt        TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
@@ -591,7 +594,7 @@ function tableMap(names) {
           id        INT AUTO_INCREMENT PRIMARY KEY,
           church_id INT NOT NULL,
           user_id   INT NOT NULL,
-          role      ENUM('owner','member') NOT NULL DEFAULT 'member',
+          role      ENUM('owner','leader','treasurer','missions','member') NOT NULL DEFAULT 'member',
           status    ENUM('pending','active','removed') NOT NULL DEFAULT 'pending',
           shareLibrary TINYINT(1) NOT NULL DEFAULT 0,
           shareContact TINYINT(1) NOT NULL DEFAULT 0,
@@ -599,6 +602,20 @@ function tableMap(names) {
           contactAddress VARCHAR(500) NOT NULL DEFAULT '',
           createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uq_church_user (church_id, user_id),
+          FOREIGN KEY (church_id) REFERENCES churches(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+        name: 'announcements',
+        sql: `CREATE TABLE IF NOT EXISTS announcements (
+          id         INT AUTO_INCREMENT PRIMARY KEY,
+          church_id  INT NOT NULL,
+          user_id    INT NOT NULL,
+          title      VARCHAR(150)  NOT NULL,
+          body       VARCHAR(4000) NOT NULL DEFAULT '',
+          createdAt  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAt  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          KEY idx_church_created (church_id, createdAt),
           FOREIGN KEY (church_id) REFERENCES churches(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },

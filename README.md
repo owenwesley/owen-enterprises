@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.24** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.25** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -311,7 +311,7 @@ Step 1 of the Church module (design agreed 2026-10-04, built in 1.11.19). A chur
 
 **What step 1 does:** a user requests a church (it starts *pending*; an admin approves it with a script) and becomes its owner. Other users join with the church's 8-character join code and wait for the owner to approve them. The owner approves or declines people, removes members and edits the mission statement. Members see the member list (display names only) and the mission statement. Nothing else is shared: joining a church exposes no one's library, health data or contact details.
 
-**Step 2 (1.11.23) added** the library link (opt-in book and movie catalog; contacts are never shared), join-code reset, a wrong-code limit, ownership hand-over and a web page for church approval; see the 1.11.23 history entry. **Step 3 (1.11.24) added** shared contact info between church members (opt-in, live, read-only in Contacts); see the 1.11.24 history entry. **Not built yet:** prayers, finances, missions, announcements, per-church area toggles, more roles (treasurer, mission leaders), a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
+**Step 2 (1.11.23) added** the library link (opt-in book and movie catalog; contacts are never shared), join-code reset, a wrong-code limit, ownership hand-over and a web page for church approval; see the 1.11.23 history entry. **Step 3 (1.11.24) added** shared contact info between church members (opt-in, live, read-only in Contacts); see the 1.11.24 history entry. **Step 3 (1.11.25) finished** announcements, roles (leader, treasurer, mission leader) and per-church area switches; see the 1.11.25 history entry. **Not built yet:** prayers (lawyer review first), finances, missions, what the treasurer and mission-leader roles can do (they are labels only), a church switcher beyond a simple picker. Meetings stays separate and is not connected to church data in any way.
 
 **Database `church`** (env `DB_CHURCH`, default `church`; the fifth database). `dbNames()` in `db/init.js` includes it, which is what makes `idRefs.js`, `rebuildTable.js`, `cleanOrphans.js` and `deleteUser.js` look inside it. Tables are named for what they hold:
 - `churches`: `id`, `name`, `missionStatement`, `joinCode` (8 characters, unique), `status` (`pending` / `approved` / `rejected` / `suspended`), `createdAt`.
@@ -389,6 +389,14 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.25** — Church module, step 3 (rest): announcements, roles, per-church area switches.
+- **Announcements:** `GET /church/:id/announcements/:uid` (any active member, newest first, max 100), `POST .../announcements/post|edit|delete/:uid` (permission `announcements.post`). Table `announcements` (title 150, body 4000). A member who later leaves shows as "Former member". Do not post private details: the dialog says so.
+- **Roles:** `owner`, `leader`, `treasurer`, `missions`, `member` (`members.role` ENUM widened automatically at start-up; existing rows unchanged). The owner sets a role with `POST /church/:id/members/role/:uid` `{ memberId, role }` (never `owner`: that is the hand-over). A **leader** posts announcements and approves / declines / removes ordinary members only; cannot edit the mission, reset the code, hand over, set roles or area switches. **Treasurer and mission leader are labels only** until finances / missions exist. `GET /church/mine` now returns `permissions` and `areas`, and the page uses them instead of guessing from the role name.
+- **Area switches (owner only):** `POST /church/:id/areas/:uid` `{ announcements?, library?, contacts? }`. Off closes the area for everyone, the owner included, enforced on the server in `middleware/church.js` (`AREA_OF`). Switching Library or Contacts off also clears every member's sharing and erases phones / addresses, so switching back on shares nothing until each person opts in again. Announcements are only hidden, not deleted. New `churches.areaAnnouncements / areaLibrary / areaContacts` (default 1, added at start-up, so existing churches are unchanged).
+- **Fix vs the 1.11.24 zip:** the area check in `middleware/church.js` was a placeholder (`(false)`), so switches were not enforced; now enforced. The client had no roles / areas / leader screens; added (Members tab role picker, "Church areas (owner)" card on the Sharing tab, closed-area notes, announcements for leaders).
+- **Tests:** `check:church4` (announcements, 38), `check:church5` (roles and areas, 72), plus `check` 28, `check:church` 72, `check:church2` 86, `check:church3` 41. Upgrade from a 1.11.24-shaped church database checked: columns added, role list widened, announcements table created.
+- **Not verified:** your own machine, MySQL 8 (sandbox is MariaDB 10.11). Headless Chromium checked: owner makes a Leader, the leader posts on a phone-size screen, owner switches Announcements off and a member sees "turned this off".
 
 **1.11.24** — Church module, step 3 (first part): church members appear in each other's Contacts.
 - **Opt-in contact sharing:** new columns `members.shareContact` (default 0), `contactPhone`, `contactAddress` (added to existing databases at start-up). `POST /church/:church_id/contact/share/:user_id` `{ share, phone, address }` (any active member) and `GET /church/contacts/:user_id`. A member who switches it on is shown to the other active members of the same approved church(es) with first and last name, the **account email**, and the phone and address typed on the Sharing tab (both optional; the two-step sign-in phone is never used). No user ids are sent.
