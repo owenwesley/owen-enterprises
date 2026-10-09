@@ -74,7 +74,8 @@ async function main() {
     check("Owen's own book is not in the shared list", !(r.json.books || []).some((b) => b.title === 'Owen Own Book'));
     check("Cara (not sharing) is not listed", !JSON.stringify(r.json).includes('Cara Private Book'));
     const s = JSON.stringify(r.json);
-    check('no borrower name, picture path or user id leaks', !s.includes('Zebediah') && !s.includes('secret.png') && !/user_id|"id"/.test(s), s);
+    check("the cover picture is sent (1.11.27)", book.img === '/images/secret.png', s);
+    check('no borrower name or owner user id leaks', !s.includes('Zebediah') && !/user_id|\"id\"/.test(s), s);
     check('no token: 401', (await api('GET', `/church/shared-library/${A.id}`)).status === 401);
     check("another user's id in the URL: 403", (await api('GET', `/church/shared-library/${B.id}`, { token: A.token })).status === 403);
 
@@ -89,6 +90,33 @@ async function main() {
     check("Russ's book is untouched", (await q(dbs.communitylibrary, 'SELECT title FROM books WHERE id=?', [rb.id]))[0]?.title === 'Russ Book Alpha');
     check("Russ's movie is untouched", (await q(dbs.communitylibrary, 'SELECT name FROM movies WHERE id=?', [rm.id]))[0]?.name === 'Russ Set');
 
+    section('Ask to borrow');
+    const mv = (r.json.movies || []).find((m) => m.name === 'Russ Set');
+    check('items carry a ref', Number.isInteger(book.ref) && Number.isInteger(mv.ref));
+    check('asking for an Out book: 409', (await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'book', ref: book.ref } })).status === 409);
+    const ask = await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'movie', ref: mv.ref, note: 'Movie night?' } });
+    check('asking for an In movie: 201', ask.status === 201, JSON.stringify(ask.json));
+    check('asking twice: 409', (await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'movie', ref: mv.ref } })).status === 409);
+    const own = (await q(dbs.communitylibrary, 'SELECT id FROM books WHERE user_id=? AND title=?', [A.id, 'Owen Own Book']))[0];
+    check('asking for your own item: 404', (await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'book', ref: own.id } })).status === 404);
+    const cara = (await q(dbs.communitylibrary, 'SELECT id FROM books WHERE user_id=? AND title=?', [C.id, 'Cara Private Book']))[0];
+    check("asking for a non-sharer's item: 404", (await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'book', ref: cara.id } })).status === 404);
+    const bIn = (await api('GET', `/church/borrow/${B.id}`, { token: B.token })).json;
+    check('Russ sees the request with Owen\'s name and note', bIn.incoming.length === 1 && bIn.incoming[0].from === 'Owen Sharer' && bIn.incoming[0].note === 'Movie night?' && bIn.incoming[0].status === 'pending', JSON.stringify(bIn));
+    check('no user ids in the lists', !/requester_id|user_id/.test(JSON.stringify(bIn)));
+    const aOut = (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json;
+    check('Owen sees it as waiting', aOut.outgoing.length === 1 && aOut.outgoing[0].to === 'Russ Sharer' && aOut.outgoing[0].status === 'pending', JSON.stringify(aOut));
+    const reqId = bIn.incoming[0].id;
+    check("Owen cannot answer Russ's request", (await api('POST', `/church/borrow/answer/${A.id}`, { token: A.token, body: { id: reqId, accept: true } })).status === 404);
+    check("Russ cannot use Owen's id in the URL: 403", (await api('POST', `/church/borrow/answer/${A.id}`, { token: B.token, body: { id: reqId, accept: true } })).status === 403);
+    check('Russ accepts', (await api('POST', `/church/borrow/answer/${B.id}`, { token: B.token, body: { id: reqId, accept: true } })).status === 200);
+    check('Owen sees Yes', (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing[0].status === 'accepted');
+    check('Owen clears it', (await api('POST', `/church/borrow/clear/${A.id}`, { token: A.token, body: { id: reqId } })).status === 200
+      && (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing.length === 0);
+    const again = await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'movie', ref: mv.ref } });
+    const cid = (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing[0].id;
+    check('Owen cancels a pending request', again.status === 201 && (await api('POST', `/church/borrow/cancel/${A.id}`, { token: A.token, body: { id: cid } })).status === 200);
+
     section('Switching off');
     await api('POST', `/church/${churchId}/library/share/${B.id}`, { token: B.token, body: { share: false } });
     const off = await api('GET', `/church/shared-library/${A.id}`, { token: A.token });
@@ -99,6 +127,7 @@ async function main() {
     section('Cleanup');
     try {
       if (churchId) await q(dbs.church, 'DELETE FROM churches WHERE id=?', [churchId]);
+      await q(dbs.church, 'DELETE FROM borrow_requests WHERE title IN (?)', [['Russ Set', 'Russ Book Alpha']]);
       const deleteUser = require('../db/maintenance/deleteUser');
       for (const n of Object.values(names)) { try { await deleteUser(n, true, () => {}); console.log(`  cleanup: removed ${n}`); } catch (e) { if (!/no user named/.test(e.message)) console.log(`  cleanup: ${n}: ${e.message}`); } }
     } catch (e) { console.log(`  cleanup problem: ${e.message}`); }

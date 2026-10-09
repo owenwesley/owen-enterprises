@@ -13,7 +13,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const mysql = require('mysql2');
 const { dbNames } = require('../init');
 
-const USER_COLS   = ['user_id', 'doctor_id', 'patient_id'];
+const USER_COLS   = ['user_id', 'doctor_id', 'patient_id', 'requester_id'];
 const CLINIC_COLS = ['clinic_id', 'requestedClinicId'];
 
 const q  = (name) => `\`${name}\``;

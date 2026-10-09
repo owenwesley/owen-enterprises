@@ -390,6 +390,14 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.11.27** — Shared Books / Movies are now a card grid with covers, an owner line and "Ask to borrow".
+- **Grid:** the "Shared by your church" list under the search is now cards like your own: cover picture, In/Out chip, title, author or films, and at the bottom "Owned by Russ Sharer" plus the church name. The button reads "Ask to borrow" (or "Requested" / "Out right now"). No cover = a plain grey card with the title.
+- **Ask to borrow:** the button opens a box for an optional message (300 characters) and sends a request to the owner. The owner sees "Russ would like to borrow ..." under their own Books / Movies search area with Yes / No; the asker sees "Waiting / Yes / No" with Cancel / Clear. Rules: only items that are In, only from members you share with, one open request per item, max 20 open requests, never your own items. Nobody's user id is sent to the browser.
+- **Privacy change:** the shared list now includes the cover picture path and the item's row id (`ref`, used only to ask). Borrower names (`who`), owner user ids and emails are still never sent.
+- **Server:** `POST /church/borrow/request|answer|cancel|clear/:user_id`, `GET /church/borrow/:user_id`; table `church.borrow_requests` (created at start-up in `db/db.js` and `db/init.js`, kept identical); SQL in `db/sql/church/borrow.js` and `library.js`. `requester_id` added to the user-id lists in `idRefs.js` and `rebuildTable.js` so the weekly renumber and user delete follow it.
+- **Client:** `communityLibrary/SharedResults.jsx` (cards, ask box, requests panel).
+- **Test:** `npm run check:church6` is now 28 checks. Verified in sandbox: check 23 (dev server), church 72, church2 86, church3 41, church4 38, church5 72, church6 28; client build OK. NOT verified: the grid in a real browser or on a phone.
+
 **1.11.26** — Books and Movies search now also shows what church members have shared (read-only).
 - **What it does:** type in the Books or Movies search box and, under your own results, a "Shared by your church (view only)" list shows matching titles other members have shared, with who has it ("Russ Sharer has it · Grace Church") and In / Out. There are no edit or delete buttons on those rows, and the server has no route that can change another person's row (edit and delete are `WHERE id=? AND user_id=?`).
 - **Rules:** it is reciprocal, you only see members of a church where you have also switched library sharing on. Never your own items, never borrower names, pictures, ids or emails. Switching sharing off, leaving, removal, suspension or the owner's Library area switch removes it at once. Nothing is copied into anyone's tables.

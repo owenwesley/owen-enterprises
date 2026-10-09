@@ -94,7 +94,7 @@ const MAX_SAFE_ID = 2147483647;   // conservative: signed INT
  * every table of all five databases.
  */
 const ID_REFERENCES = {
-  users:   ['user_id', 'doctor_id', 'patient_id'],
+  users:   ['user_id', 'doctor_id', 'patient_id', 'requester_id'],
   clinics: ['clinic_id', 'requestedClinicId'],
 };
 

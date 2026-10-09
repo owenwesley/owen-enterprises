@@ -600,6 +600,22 @@ const TABLES = {
         FOREIGN KEY (church_id) REFERENCES churches(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
+    {
+      name: 'borrow_requests',
+      sql: `CREATE TABLE IF NOT EXISTS borrow_requests (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        user_id      INT NOT NULL,
+        requester_id INT NOT NULL,
+        kind         ENUM('book','movie') NOT NULL,
+        item_id      INT NOT NULL,
+        title        VARCHAR(255) NOT NULL,
+        note         VARCHAR(500) NOT NULL DEFAULT '',
+        status       ENUM('pending','accepted','declined','cancelled') NOT NULL DEFAULT 'pending',
+        createdAt    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_owner (user_id, status),
+        KEY idx_requester (requester_id, status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    },
   ],
 };
 

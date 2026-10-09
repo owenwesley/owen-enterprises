@@ -62,7 +62,11 @@ const {
   setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
   setShareContact, selectContactSharers, selectLibrarySharers,
 } = require('../db/sql/church/members');
-const { selectSharedBooks, selectSharedMovies } = require('../db/sql/church/library');
+const { selectSharedBooks, selectSharedMovies, selectBookForBorrow, selectMovieForBorrow } = require('../db/sql/church/library');
+const {
+  insertBorrow, selectPendingDuplicate, countPendingByRequester, selectIncoming, selectOutgoing,
+  answerBorrow, cancelBorrow, clearBorrow,
+} = require('../db/sql/church/borrow');
 const { selectAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement } = require('../db/sql/church/announcements');
 
 const router = express.Router();
@@ -429,7 +433,7 @@ router.get('/:church_id/library/:user_id', requireChurch('library.view'), async 
         const count = Math.min(Math.max(Number(m.numMovie) || 1, 1), 12);
         const films = [];
         for (let i = 1; i <= count; i++) {
-          if (m[`name${i}`]) films.push({ name: m[`name${i}`], available: m[`io${i}`] === 1 && !m.lost });
+          if (m[`name${i}`]) films.push({ name: m[`name${i}`], img: m[`img${i}`] || undefined, available: m[`io${i}`] === 1 && !m.lost });
         }
         return {
           name: m.name,
@@ -471,8 +475,9 @@ router.post('/:church_id/contact/share/:user_id', requireChurch('contact.share')
 // Live, read-only list for the Books and Movies pages: other members' shared titles, so a search there
 // can say "Russ has it". Nothing is copied into anyone's tables and there is no edit or delete route
 // for these rows: the Community Library routes only ever touch the signed-in user's own rows
-// (WHERE id=? AND user_id=?). Same whitelist as the church catalog: no borrower names, pictures,
-// ids or emails. Only people from a church where the viewer has also switched sharing on.
+// (WHERE id=? AND user_id=?). Same whitelist as the church catalog: no borrower names, owner user
+// ids or emails. Since 1.11.27 it also carries the cover picture path and `ref` (the item's own row id,
+// used only to ask to borrow it). Only people from a church where the viewer has also switched sharing on.
 router.get('/shared-library/:user_id', async (req, res) => {
   try {
     const [rows] = await db.promise().query(selectLibrarySharers, [req.user.id, req.user.id]);
@@ -487,17 +492,107 @@ router.get('/shared-library/:user_id', async (req, res) => {
     const [movies] = await library.promise().query(selectSharedMovies, [ids]);
     return res.json({
       books: books.filter((b) => names.has(b.user_id)).map((b) => ({
-        ...owner(b.user_id), title: b.title, author: b.author, year: b.copywrite || undefined, available: b.io === 1 && !b.lost,
+        ...owner(b.user_id), ref: b.id, title: b.title, author: b.author, year: b.copywrite || undefined, img: b.img_url || undefined, available: b.io === 1 && !b.lost,
       })),
       movies: movies.filter((m) => names.has(m.user_id)).map((m) => {
         const count = Math.min(Math.max(Number(m.numMovie) || 1, 1), 12);
         const films = [];
         for (let i = 1; i <= count; i++) {
-          if (m[`name${i}`]) films.push({ name: m[`name${i}`], available: m[`io${i}`] === 1 && !m.lost });
+          if (m[`name${i}`]) films.push({ name: m[`name${i}`], img: m[`img${i}`] || undefined, available: m[`io${i}`] === 1 && !m.lost });
         }
-        return { ...owner(m.user_id), name: m.name, media: m.featureMedia || undefined, available: m.io === 1 && !m.lost, films };
+        return { ...owner(m.user_id), ref: m.id, name: m.name, media: m.featureMedia || undefined, img: m.img_url || undefined, available: m.io === 1 && !m.lost, films };
       }),
     });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Ask to borrow ──────────────────────────────────────────────────────────────
+// A request goes from a member to the member who shared the book / movie. Both must still be in
+// a church where library sharing is on (same rule as the shared list). Every path ends in the
+// signed-in user's id, as ownerOnly() requires. Nobody's id is ever sent to the browser: the owner
+// sees the asker's name, the asker sees the owner's name.
+const BORROW_NOTE_MAX = 300;
+const BORROW_PENDING_MAX = 20;
+const personName = async (ids) => {
+  if (!ids.length) return new Map();
+  const [u] = await gateway.promise().query('SELECT id, firstName, lastName FROM users WHERE id IN (?)', [ids]);
+  return new Map(u.map((x) => [x.id, `${x.firstName} ${x.lastName}`.trim()]));
+};
+
+// POST /church/borrow/request/:user_id   { kind: 'book'|'movie', ref, note? }
+router.post('/borrow/request/:user_id', async (req, res) => {
+  try {
+    const { kind, ref } = req.body || {};
+    const note = String((req.body || {}).note || '').trim().slice(0, BORROW_NOTE_MAX);
+    if (!['book', 'movie'].includes(kind) || !Number.isInteger(ref)) return res.status(400).json({ error: 'Choose a book or movie.' });
+    const [sharers] = await db.promise().query(selectLibrarySharers, [req.user.id, req.user.id]);
+    const ids = [...new Set(sharers.map((r) => r.user_id))];
+    if (!ids.length) return res.status(404).json({ error: 'That item is not shared with you.' });
+    const [rows] = await library.promise().query(kind === 'book' ? selectBookForBorrow : selectMovieForBorrow, [ref, ids]);
+    const item = rows[0];
+    if (!item) return res.status(404).json({ error: 'That item is not shared with you.' });
+    if (item.io !== 1 || item.lost) return res.status(409).json({ error: 'That item is out right now.' });
+    const [dup] = await db.promise().query(selectPendingDuplicate, [req.user.id, item.user_id, kind, item.title]);
+    if (dup.length) return res.status(409).json({ error: 'You already asked for this one.' });
+    const [[cnt]] = await db.promise().query(countPendingByRequester, [req.user.id]);
+    if (cnt.n >= BORROW_PENDING_MAX) return res.status(429).json({ error: 'You have too many open requests. Cancel some first.' });
+    await db.promise().query(insertBorrow, [item.user_id, req.user.id, kind, item.id, item.title, note]);
+    return res.status(201).json({ message: 'Request sent.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /church/borrow/:user_id  ->  { incoming: [...], outgoing: [...] }
+router.get('/borrow/:user_id', async (req, res) => {
+  try {
+    const [inc] = await db.promise().query(selectIncoming, [req.user.id]);
+    const [out] = await db.promise().query(selectOutgoing, [req.user.id]);
+    const names = await personName([...new Set([...inc.map((r) => r.requester_id), ...out.map((r) => r.user_id)])]);
+    return res.json({
+      incoming: inc.map((r) => ({ id: r.id, from: names.get(r.requester_id) || 'Someone', kind: r.kind, title: r.title, note: r.note, status: r.status, createdAt: r.createdAt })),
+      outgoing: out.map((r) => ({ id: r.id, to: names.get(r.user_id) || 'Someone', kind: r.kind, title: r.title, status: r.status, createdAt: r.createdAt })),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/borrow/answer/:user_id   { id, accept }   the owner answers a pending request
+router.post('/borrow/answer/:user_id', async (req, res) => {
+  try {
+    const { id, accept } = req.body || {};
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Choose a request.' });
+    const [r] = await db.promise().query(answerBorrow, [accept ? 'accepted' : 'declined', id, req.user.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Request not found.' });
+    return res.json({ message: accept ? 'Accepted.' : 'Declined.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/borrow/cancel/:user_id   { id }   the asker withdraws their own pending request
+router.post('/borrow/cancel/:user_id', async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Choose a request.' });
+    const [r] = await db.promise().query(cancelBorrow, [id, req.user.id]);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Request not found.' });
+    return res.json({ message: 'Cancelled.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /church/borrow/clear/:user_id   { id }   remove an answered request from either side's list
+router.post('/borrow/clear/:user_id', async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Choose a request.' });
+    await db.promise().query(clearBorrow, [id, req.user.id, req.user.id]);
+    return res.json({ message: 'Cleared.' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

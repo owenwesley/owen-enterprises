@@ -1,10 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
-import { getFetch } from '../../utils/api';
+import Card from '@mui/material/Card';
+import CardMedia from '@mui/material/CardMedia';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import { getFetch, postFetch } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
 
-// Read-only list of what other church members shared (live from the server, never copied into
+// Read-only cards of what other church members shared (live from the server, never copied into
 // this person's own library). There are deliberately no edit or delete buttons here, and the
 // server has no route that could change another person's row.
 export function useSharedLibrary() {
@@ -22,41 +32,183 @@ export function useSharedLibrary() {
   return shared;
 }
 
-const box = { marginTop: 16 };
-const row = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #e0e0e0' };
+// ── Borrow requests (asked and received) ──────────────────────────────────────
+export function useBorrow() {
+  const { state } = useAppContext();
+  const userId = state.user.id;
+  const [data, setData] = useState({ incoming: [], outgoing: [] });
+  const load = useCallback(() => {
+    if (!userId) return Promise.resolve();
+    return getFetch(`/church/borrow/${userId}`)
+      .then((d) => setData({ incoming: d?.incoming || [], outgoing: d?.outgoing || [] }))
+      .catch(() => { /* no church: nothing to show */ });
+  }, [userId]);
+  useEffect(() => { load(); }, [load]);
+  return {
+    ...data,
+    reload: load,
+    request: async (kind, ref, note) => {
+      const r = await postFetch(`/church/borrow/request/${userId}`, { kind, ref, note });
+      await load();
+      return r;
+    },
+    accept: async (id) => { await postFetch(`/church/borrow/answer/${userId}`, { id, accept: true }); await load(); },
+    decline: async (id) => { await postFetch(`/church/borrow/answer/${userId}`, { id, accept: false }); await load(); },
+    cancel: async (id) => { await postFetch(`/church/borrow/cancel/${userId}`, { id }); await load(); },
+    clear: async (id) => { await postFetch(`/church/borrow/clear/${userId}`, { id }); await load(); },
+  };
+}
 
-function Row({ title, sub, by, church, available }) {
+const statusColor = { pending: 'default', accepted: 'primary', declined: 'secondary' };
+
+/** Requests other members sent you (answer them) and requests you sent (cancel or clear them). */
+export function BorrowRequests({ borrow }) {
+  const { incoming, outgoing } = borrow;
+  if (!incoming.length && !outgoing.length) return null;
+  const line = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #e0e0e0' };
   return (
-    <div style={row}>
-      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{title}</Typography>
-        {sub ? <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>{sub}</Typography> : null}
-        <Typography sx={{ fontSize: '0.75rem', color: '#1565c0' }}>
-          {`${by} has it${church ? ` · ${church}` : ''}`}
-        </Typography>
-      </div>
-      <Chip size="small" label={available ? 'In' : 'Out'} color={available ? 'primary' : 'secondary'} />
+    <div style={{ marginTop: 16 }}>
+      {incoming.length > 0 && (
+        <>
+          <Typography sx={{ fontWeight: 700, color: '#1565c0' }}>Requests to borrow yours</Typography>
+          {incoming.map((r) => (
+            <div key={`i${r.id}`} style={line}>
+              <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{`${r.from} would like to borrow "${r.title}"`}</Typography>
+                {r.note ? <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>{r.note}</Typography> : null}
+              </div>
+              {r.status === 'pending' ? (
+                <>
+                  <Button size="small" variant="contained" onClick={() => borrow.accept(r.id)}>Yes</Button>
+                  <Button size="small" onClick={() => borrow.decline(r.id)}>No</Button>
+                </>
+              ) : (
+                <>
+                  <Chip size="small" label={r.status === 'accepted' ? 'You said yes' : 'You said no'} color={statusColor[r.status]} />
+                  <Button size="small" onClick={() => borrow.clear(r.id)}>Clear</Button>
+                </>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+      {outgoing.length > 0 && (
+        <>
+          <Typography sx={{ fontWeight: 700, color: '#1565c0', marginTop: 1 }}>Your requests</Typography>
+          {outgoing.map((r) => (
+            <div key={`o${r.id}`} style={line}>
+              <Typography sx={{ flex: '1 1 200px', minWidth: 0, fontSize: '0.9rem' }}>{`"${r.title}" from ${r.to}`}</Typography>
+              <Chip size="small" color={statusColor[r.status]}
+                label={r.status === 'pending' ? 'Waiting' : r.status === 'accepted' ? 'Yes' : 'No'} />
+              {r.status === 'pending'
+                ? <Button size="small" onClick={() => borrow.cancel(r.id)}>Cancel</Button>
+                : <Button size="small" onClick={() => borrow.clear(r.id)}>Clear</Button>}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
 
-/** kind: 'books' | 'movies'. Shows nothing until something is typed in the search box. */
+const grid = { display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 };
+const cardSx = { width: 'calc(50% - 8px)', maxWidth: 160, display: 'flex', flexDirection: 'column', position: 'relative' };
+
+function Cover({ src, alt }) {
+  const [bad, setBad] = useState(!src);
+  if (bad) {
+    return (
+      <div style={{ height: 200, background: '#eceff1', color: '#78909c', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 8, fontSize: '0.8rem' }}>
+        {alt}
+      </div>
+    );
+  }
+  return <CardMedia component="img" sx={{ height: 200, objectFit: 'cover' }} image={src} alt={alt} onError={() => setBad(true)} />;
+}
+
+function ShareCard({ kind, item, title, sub, borrow, onAsk }) {
+  const pending = borrow.outgoing.some((r) => r.status === 'pending' && r.kind === kind && r.title === title && r.to === item.sharedBy);
+  return (
+    <Card sx={cardSx} elevation={3}>
+      <Cover src={item.img} alt={title} />
+      <span style={{ position: 'absolute', top: 8, right: 8 }}>
+        <Chip size="small" label={item.available ? 'In' : 'Out'} color={item.available ? 'primary' : 'secondary'} />
+      </span>
+      <CardContent style={{ padding: '8px 10px', flexGrow: 1 }}>
+        <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1.2 }}>{title}</Typography>
+        {sub ? <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>{sub}</Typography> : null}
+      </CardContent>
+      <div style={{ padding: '6px 10px', borderTop: '1px solid #e0e0e0', background: '#f5f9ff' }}>
+        <Typography sx={{ fontSize: '0.72rem', color: '#1565c0', fontWeight: 600 }}>{`Owned by ${item.sharedBy}`}</Typography>
+        {item.church ? <Typography sx={{ fontSize: '0.68rem', color: '#555' }}>{item.church}</Typography> : null}
+      </div>
+      <CardActions style={{ padding: '4px' }}>
+        <Button size="small" fullWidth disabled={pending || !item.available} onClick={() => onAsk({ kind, ref: item.ref, title, owner: item.sharedBy })}>
+          {pending ? 'Requested' : item.available ? 'Ask to borrow' : 'Out right now'}
+        </Button>
+      </CardActions>
+    </Card>
+  );
+}
+
+function AskDialog({ ask, onClose, onSend }) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setNote(''); setBusy(false); }, [ask]);
+  if (!ask) return null;
+  const send = async () => {
+    setBusy(true);
+    const r = await onSend(ask, note);
+    setBusy(false);
+    if (r && !r.error) onClose();
+  };
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{`Ask ${ask.owner} to borrow "${ask.title}"?`}</DialogTitle>
+      <DialogContent>
+        <TextField autoFocus fullWidth multiline minRows={2} margin="dense" label="Message (optional)"
+          value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" disabled={busy} onClick={send}>Send request</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** kind: 'books' | 'movies'. Shows nothing until something is typed in the search box
+ *  (answered requests still show, so the owner can always see who asked). */
 export default function SharedResults({ kind, search }) {
   const shared = useSharedLibrary();
+  const borrow = useBorrow();
+  const [ask, setAsk] = useState(null);
   const q = (search || '').trim().toLowerCase();
-  if (!q) return null;
-  const hits = kind === 'books'
+  const one = kind === 'books' ? 'book' : 'movie';
+  const hits = !q ? [] : kind === 'books'
     ? shared.books.filter((b) => `${b.title} ${b.author}`.toLowerCase().includes(q))
     : shared.movies.filter((m) => (m.name || '').toLowerCase().includes(q) || m.films.some((f) => f.name.toLowerCase().includes(q)));
-  if (!hits.length) return null;
+  const mine = {
+    incoming: borrow.incoming.filter((r) => r.kind === one),
+    outgoing: borrow.outgoing.filter((r) => r.kind === one),
+  };
+  const send = (a, note) => borrow.request(a.kind, a.ref, note);
   return (
-    <div style={box}>
-      <Typography sx={{ fontWeight: 700, color: '#1565c0' }}>Shared by your church (view only)</Typography>
-      {hits.map((h, i) => (kind === 'books'
-        ? <Row key={i} title={h.title} sub={[h.author, h.year].filter(Boolean).join(' · ')} by={h.sharedBy} church={h.church} available={h.available} />
-        : <Row key={i} title={h.name}
-            sub={h.films.length > 1 ? h.films.map((f) => f.name).join(', ') : h.media}
-            by={h.sharedBy} church={h.church} available={h.available} />))}
-    </div>
+    <>
+      {hits.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <Typography sx={{ fontWeight: 700, color: '#1565c0' }}>Shared by your church</Typography>
+          <div style={grid}>
+            {hits.map((h) => (kind === 'books'
+              ? <ShareCard key={`b${h.ref}`} kind="book" item={h} title={h.title}
+                  sub={[h.author, h.year].filter(Boolean).join(' · ')} borrow={borrow} onAsk={setAsk} />
+              : <ShareCard key={`m${h.ref}`} kind="movie" item={h} title={h.name}
+                  sub={h.films.length > 1 ? h.films.map((f) => f.name).join(', ') : h.media} borrow={borrow} onAsk={setAsk} />))}
+          </div>
+        </div>
+      )}
+      <BorrowRequests borrow={{ ...borrow, ...mine }} />
+      <AskDialog ask={ask} onClose={() => setAsk(null)} onSend={send} />
+    </>
   );
 }
