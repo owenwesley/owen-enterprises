@@ -160,59 +160,54 @@ export function useReadings() {
       Bed: Boolean(row.chkMedsBed) && !original.chkMedsBed,
     };
 
-    // Fix: the medication list is only loaded into state when the Medications
-    // page is opened (pages.jsx), so on the Readings page `medications` was empty
-    // (or stale) and ticking a Meds box deducted nothing. Read the current list
-    // from the server right before it is needed. If that request fails, fall back
-    // to whatever is in state.
-    // ONE working copy of the medication list for this whole save. The
-    // sliding-scale deduction and the Meds-tick deduction both read and write
-    // it, so the second can't start from the stale pre-edit quantities and
-    // overwrite the first for the same medication.
-    let workingMeds = [...medications];
-    if (useSlidingScale || Object.values(newlyChecked).some(Boolean)) {
-      const fresh = await getFetch(`/bgtracker/medications/${user.id}`);
-      if (fresh && Array.isArray(fresh.results)) workingMeds = fresh.results;
-    }
-
+    // Sliding scale first: it only fills in the Fast doses. Typed doses (Slow,
+    // and Fast when sliding scale is off) are already in `row`.
     if (useSlidingScale) {
       row.insulinFB  = calcSlidingScale(parseInt(row.sugarB  || 0), parseInt(row.carbsB  || 0), pref);
       row.insulinL   = calcSlidingScale(parseInt(row.sugarL  || 0), parseInt(row.carbsL  || 0), pref);
       row.insulinD   = calcSlidingScale(parseInt(row.sugarD  || 0), parseInt(row.carbsD  || 0), pref);
       row.insulinBB  = calcSlidingScale(parseInt(row.sugarBB || 0), parseInt(row.carbsBB || 0), pref);
       row.insulinFBed= calcSlidingScale(parseInt(row.sugarBed|| 0), parseInt(row.carbsBed|| 0), pref);
+    }
 
-      const meds = workingMeds;
-      // Fix: `prev` used to be read from `row[field]` — the same object
-      // `current` reads from, after that field had just been overwritten
-      // by calcSlidingScale() a few lines up for 5 of these 9 fields, and
-      // for the other 4 it was still the same post-merge value as
-      // `current`. `prev !== current` was therefore comparing a value to
-      // itself and was always false, so this deduction never ran for any
-      // field. `prev` now comes from `original` (the truly pre-edit row),
-      // and the medication quantity is reduced by the actual before/after
-      // delta rather than the full new dose, so correcting a typo (e.g.
-      // 5 -> 8 units) only deducts the extra 3, not 8 again.
-      const insulin_deductions = [
-        { field: 'insulinFB',  name: 'Fast Acting',  prev: parseInt(original.insulinFB  || 0) },
-        { field: 'insulinSB',  name: 'Slow Acting',  prev: parseInt(original.insulinSB  || 0) },
-        { field: 'insulinL',   name: 'Fast Acting',  prev: parseInt(original.insulinL   || 0) },
-        { field: 'insulinD',   name: 'Fast Acting',  prev: parseInt(original.insulinD   || 0) },
-        { field: 'insulinBB',  name: 'Fast Acting',  prev: parseInt(original.insulinBB  || 0) },
-        { field: 'insulinFBed',name: 'Fast Acting',  prev: parseInt(original.insulinFBed|| 0) },
-        { field: 'insulinSBed',name: 'Slow Acting',  prev: parseInt(original.insulinSBed|| 0) },
-      ];
+    // Insulin stock follows every dose change, with or without sliding scale
+    // (1.11.21 follow-up: this used to run only when sliding scale was on, so
+    // typed Slow / Fast doses never reduced stock for anyone else).
+    // `prev` comes from `original` (the truly pre-edit row) and stock is changed
+    // by the before/after delta, so correcting 5 -> 8 units takes only 3 more,
+    // a re-save with no change takes nothing, and lowering a dose (or clearing
+    // it to 0) gives the difference back.
+    const insulin_deductions = [
+      { field: 'insulinFB',  name: 'Fast Acting',  prev: parseInt(original.insulinFB  || 0) },
+      { field: 'insulinSB',  name: 'Slow Acting',  prev: parseInt(original.insulinSB  || 0) },
+      { field: 'insulinL',   name: 'Fast Acting',  prev: parseInt(original.insulinL   || 0) },
+      { field: 'insulinD',   name: 'Fast Acting',  prev: parseInt(original.insulinD   || 0) },
+      { field: 'insulinBB',  name: 'Fast Acting',  prev: parseInt(original.insulinBB  || 0) },
+      { field: 'insulinFBed',name: 'Fast Acting',  prev: parseInt(original.insulinFBed|| 0) },
+      { field: 'insulinSBed',name: 'Slow Acting',  prev: parseInt(original.insulinSBed|| 0) },
+    ].map((d) => ({ ...d, delta: (parseInt(row[d.field] || 0) || 0) - (d.prev || 0) }))
+     .filter((d) => d.delta !== 0);
 
-      for (const { field, name, prev } of insulin_deductions) {
-        const current = parseInt(row[field] || 0);
-        const delta = current - prev;
-        if (current !== 0 && delta !== 0) {
-          for (let i = 0; i < meds.length; i++) {
-            if (meds[i].name === name) {
-              meds[i] = { ...meds[i], quantity: meds[i].quantity - delta };
-              await editMeds(user, meds, i);
-            }
-          }
+    // Fix: the medication list is only loaded into state when the Medications
+    // page is opened (pages.jsx), so on the Readings page `medications` was empty
+    // (or stale) and ticking a Meds box deducted nothing. Read the current list
+    // from the server right before it is needed. If that request fails, fall back
+    // to whatever is in state.
+    // ONE working copy of the medication list for this whole save. The
+    // insulin deduction and the Meds-tick deduction both read and write it, so
+    // the second can't start from the stale pre-edit quantities and overwrite
+    // the first for the same medication.
+    let workingMeds = [...medications];
+    if (insulin_deductions.length || Object.values(newlyChecked).some(Boolean)) {
+      const fresh = await getFetch(`/bgtracker/medications/${user.id}`);
+      if (fresh && Array.isArray(fresh.results)) workingMeds = fresh.results;
+    }
+
+    for (const { name, delta } of insulin_deductions) {
+      for (let i = 0; i < workingMeds.length; i++) {
+        if (workingMeds[i].name === name) {
+          workingMeds[i] = { ...workingMeds[i], quantity: workingMeds[i].quantity - delta };
+          await editMeds(user, workingMeds, i);
         }
       }
     }

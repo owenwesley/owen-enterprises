@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.21** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.22** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -389,6 +389,10 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.22** — insulin stock now follows typed doses.
+- **Fix:** `client/src/features/bgtracker/hooks/useReadings.js` deducted Slow / Fast insulin from the Medications table only when sliding scale was on (`carbRatio > 0`). With it off, typed doses never reduced stock. Deduction now runs whenever a dose changes, by the before/after difference: a re-save with no change takes nothing, lowering a dose gives the difference back, and clearing a dose to 0 now refunds it (it used to be skipped). Not retroactive. Sliding-scale users see no change.
+- Known, unchanged: matching is by the exact medication names "Fast Acting" / "Slow Acting"; in single-insulin mode the one dose is stored in the Slow column, so it deducts from "Slow Acting"; stock can go below 0.
 
 **1.11.21** — small follow-up to 1.11.20, no new features.
 - **Login order:** the client now loads feature settings before readings (`components/NavBar/index.jsx`). The server creates a missing `feature_preferences` row on the first GET and the HIPAA gate treats a missing row as BGTracker off, so with the gate on an older account could get an empty readings list on its first load.
