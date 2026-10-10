@@ -658,7 +658,7 @@ export default function MoviesPage() {
         </div>
       </div>
 
-      <SharedResults kind="movies" search={search} />
+      <SharedResults kind="movies" search={search} onOwnChanged={getMovies} />
 
       <FilmsDialog
         movie={filmsMovie} onClose={() => setFilmsId(null)}

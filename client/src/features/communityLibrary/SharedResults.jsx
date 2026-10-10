@@ -33,7 +33,7 @@ export function useSharedLibrary() {
 }
 
 // ── Borrow requests (asked and received) ──────────────────────────────────────
-export function useBorrow() {
+export function useBorrow(onChange) {
   const { state } = useAppContext();
   const userId = state.user.id;
   const [data, setData] = useState({ incoming: [], outgoing: [] });
@@ -52,7 +52,8 @@ export function useBorrow() {
       await load();
       return r;
     },
-    accept: async (id) => { await postFetch(`/church/borrow/answer/${userId}`, { id, accept: true }); await load(); },
+    // A Yes marks the item Out on the server, so the owner's own list is refreshed through onChange.
+    accept: async (id) => { try { await postFetch(`/church/borrow/answer/${userId}`, { id, accept: true }); } finally { await load(); if (onChange) onChange(); } },
     decline: async (id) => { await postFetch(`/church/borrow/answer/${userId}`, { id, accept: false }); await load(); },
     cancel: async (id) => { await postFetch(`/church/borrow/cancel/${userId}`, { id }); await load(); },
     clear: async (id) => { await postFetch(`/church/borrow/clear/${userId}`, { id }); await load(); },
@@ -84,7 +85,7 @@ export function BorrowRequests({ borrow }) {
                 </>
               ) : (
                 <>
-                  <Chip size="small" label={r.status === 'accepted' ? 'You said yes' : 'You said no'} color={statusColor[r.status]} />
+                  <Chip size="small" label={r.status === 'accepted' ? 'Yes - marked Out' : (r.auto ? 'Closed' : 'You said no')} color={statusColor[r.status]} />
                   <Button size="small" onClick={() => borrow.clear(r.id)}>Clear</Button>
                 </>
               )}
@@ -99,7 +100,7 @@ export function BorrowRequests({ borrow }) {
             <div key={`o${r.id}`} style={line}>
               <Typography sx={{ flex: '1 1 200px', minWidth: 0, fontSize: '0.9rem' }}>{`"${r.title}" from ${r.to}`}</Typography>
               <Chip size="small" color={statusColor[r.status]}
-                label={r.status === 'pending' ? 'Waiting' : r.status === 'accepted' ? 'Yes' : 'No'} />
+                label={r.status === 'pending' ? 'Waiting' : r.status === 'accepted' ? 'Yes' : (r.auto ? 'Taken' : 'No')} />
               {r.status === 'pending'
                 ? <Button size="small" onClick={() => borrow.cancel(r.id)}>Cancel</Button>
                 : <Button size="small" onClick={() => borrow.clear(r.id)}>Clear</Button>}
@@ -192,9 +193,9 @@ export function AskDialog({ ask, onClose, onSend }) {
 
 /** kind: 'books' | 'movies'. Shows nothing until something is typed in the search box
  *  (answered requests still show, so the owner can always see who asked). */
-export default function SharedResults({ kind, search }) {
+export default function SharedResults({ kind, search, onOwnChanged }) {
   const shared = useSharedLibrary();
-  const borrow = useBorrow();
+  const borrow = useBorrow(onOwnChanged);
   const [ask, setAsk] = useState(null);
   const q = (search || '').trim().toLowerCase();
   const one = kind === 'books' ? 'book' : 'movie';

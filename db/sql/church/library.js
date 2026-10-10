@@ -18,6 +18,20 @@ module.exports = { selectSharedBooks, selectSharedMovies };
 // Ask-to-borrow: the one row a request points at. Read only after the owner is checked against the
 // viewer's sharers list, so a row id alone never reveals anything.
 const selectBookForBorrow = `SELECT id, user_id, title, io, lost FROM books WHERE id=? AND user_id IN (?)`;
-const selectMovieForBorrow = `SELECT id, user_id, name AS title, io, lost FROM movies WHERE id=? AND user_id IN (?)`;
+const selectMovieForBorrow = `SELECT id, user_id, name AS title, numMovie, io, lost FROM movies WHERE id=? AND user_id IN (?)`;
 module.exports.selectBookForBorrow = selectBookForBorrow;
 module.exports.selectMovieForBorrow = selectMovieForBorrow;
+
+// Accepting a request marks the item Out to the borrower, in one guarded statement: it only changes
+// a row that is still In and not lost, so two accepts can never both succeed. A movie set is lent
+// whole: the disc-level io / who and every film slot (1..numMovie) are set, the same shape the
+// movie edit route stores (routes/communitylibrary/movies/_fields.js).
+const reserveBook = `UPDATE books SET io=0, who=? WHERE id=? AND user_id=? AND io=1 AND lost=0`;
+const reserveMovieSql = (numMovie) => {
+  const n = Math.min(12, Math.max(1, Math.trunc(Number(numMovie)) || 1));
+  const sets = ['io=0', 'who=?'];
+  for (let i = 1; i <= n; i++) sets.push(`io${i}=0`, `who${i}=?`);
+  return { sql: `UPDATE movies SET ${sets.join(', ')} WHERE id=? AND user_id=? AND io=1 AND lost=0`, slots: n };
+};
+module.exports.reserveBook = reserveBook;
+module.exports.reserveMovieSql = reserveMovieSql;

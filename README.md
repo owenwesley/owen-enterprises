@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.25** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.28** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -389,6 +389,18 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.28** — "Ask to borrow": a Yes now really lends the item, and the loose ends around it are closed.
+- **Yes marks it Out:** when the owner answers Yes, the book (or the whole movie set: disc and every film) is marked **Out to the asker's name** in one guarded statement (`... WHERE io=1 AND lost=0`), so it cannot overwrite a borrower the owner typed in the meantime. If the item is no longer In (lent by hand, lost, deleted) the answer is 409 and the request is closed. The owner's own Books / Movies list refreshes after a Yes (`onOwnChanged`).
+- **Competing requests:** after a Yes, every other open request for the same item is closed automatically. They show "Taken" to the asker and "Closed" to the owner (new column `auto`, so it does not count as a personal No).
+- **Membership re-checked at answer time:** a Yes needs the asker to still be in a church that shares with the owner (same rule as asking: `selectLibrarySharers`). If not: 409 and the request is closed; the item stays In.
+- **Duplicates by item, not title:** one open request per asker per item (`item_id`), so two different books with the same title no longer collide.
+- **Cooldown after a No:** the same person cannot ask for the same item again for 7 days (`BORROW_COOLDOWN_DAYS` in `db/sql/church/borrow.js`; answer 429). A system close does not start a cooldown.
+- **Clear no longer deletes:** "Clear" hides a closed request from the person who cleared it (`hideOwner` / `hideRequester`); the row is kept so the cooldown cannot be dodged by clearing. Rows hidden by both sides are purged after 7 days, any closed row after 30 (`purgeBorrow`, run opportunistically from the request route).
+- **Database:** `church.borrow_requests` gained `answeredAt`, `auto`, `hideOwner`, `hideRequester` (default values, added to existing databases at start-up by `schemaSync`; definitions identical in `db/db.js` and `db/init.js`). No change to `idRefs.js` / `rebuildTable.js`.
+- **API:** `POST /church/borrow/answer` now returns `{ message, markedOut }` on a Yes and 409 in the cases above; the lists carry `auto` (boolean). Still no user ids in any response.
+- **Test:** `npm run check:church6` is now 56 checks (movie-set shape, two askers one item, cooldown and clear, same-title items, asker stopped sharing, two simultaneous Yes, stale Yes after a hand-lent item). Verified in sandbox (MariaDB 10.11, Node 22): check 23, church 72, church2 86, church3 41, church4 38, church5 72, church6 56; client build OK; upgrade of an existing table (columns added); weekly renumber with a borrow row (`user_id` and `requester_id` followed the users renumber, new columns kept). NOT verified: the cards and panels in a real browser or on a phone; MySQL 8.
+- **Still open:** no notification beyond the in-page list (a nav badge is the next step); 500 responses still return `err.message`; CORS / `JWT_SECRET` hardening.
 
 **1.11.27 (cover fix)** — Shared cards: cover paths are tidied (leading slash, spaces), a movie set with no set cover uses its first film's picture, a picture that fails to load falls back to the stock no-cover image, then to the title tile. Client only (`SharedResults.jsx`).
 

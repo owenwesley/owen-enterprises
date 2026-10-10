@@ -243,7 +243,7 @@ export default function BooksPage() {
         ))}
       </div>
 
-      <SharedResults kind="books" search={search} />
+      <SharedResults kind="books" search={search} onOwnChanged={getBooks} />
 
       <BookDialog
         open={!!dialog}

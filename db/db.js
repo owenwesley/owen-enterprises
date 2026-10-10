@@ -612,6 +612,10 @@ const TABLES = {
         note         VARCHAR(500) NOT NULL DEFAULT '',
         status       ENUM('pending','accepted','declined','cancelled') NOT NULL DEFAULT 'pending',
         createdAt    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        answeredAt   TIMESTAMP NULL DEFAULT NULL,
+        auto         TINYINT(1) NOT NULL DEFAULT 0,
+        hideOwner    TINYINT(1) NOT NULL DEFAULT 0,
+        hideRequester TINYINT(1) NOT NULL DEFAULT 0,
         KEY idx_owner (user_id, status),
         KEY idx_requester (requester_id, status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,

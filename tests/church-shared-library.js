@@ -8,14 +8,14 @@
  *   - no borrower names, pictures or ids leak,
  *   - the other person's rows cannot be edited or deleted by you.
  * Needs the server running with the HIPAA gate off and a Church-enabled database.
- * Creates throwaway users testchu6_<time>_a/_b/_c and a throwaway church, and removes them at the end.
+ * Creates throwaway users testchu6_<time>_a/_b/_c/_d and a throwaway church, and removes them at the end.
  */
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 const BASE = (process.env.BASE_URL || 'http://localhost:4000').replace(/\/$/, '');
 const PW = 'Chk-Pass-123!';
 const stamp = Date.now();
-const names = ['a', 'b', 'c'].reduce((o, k) => ({ ...o, [k]: `testchu6_${stamp}_${k}` }), {});
+const names = ['a', 'b', 'c', 'd'].reduce((o, k) => ({ ...o, [k]: `testchu6_${stamp}_${k}` }), {});
 let passed = 0; let failed = 0;
 function check(label, cond, detail) {
   if (cond) { passed++; console.log(`  PASS  ${label}`); } else { failed++; console.log(`  FAIL  ${label}${detail ? '  -> ' + detail : ''}`); }
@@ -44,11 +44,12 @@ async function main() {
     const A = await makeUser(names.a, 'Owen');   // viewer, shares
     const B = await makeUser(names.b, 'Russ');   // shares
     const C = await makeUser(names.c, 'Cara');   // member who never shares
+    const D = await makeUser(names.d, 'Dana');   // shares later, for the competing-request checks
     const mk = await api('POST', `/church/create/${A.id}`, { token: A.token, body: { name: `Shared Lib ${stamp}`, missionStatement: 'x' } });
     churchId = mk.json.churchId;
     await q(dbs.church, "UPDATE churches SET status='approved' WHERE id=?", [churchId]);
     const code = (await q(dbs.church, 'SELECT joinCode FROM churches WHERE id=?', [churchId]))[0].joinCode;
-    for (const u of [B, C]) await api('POST', `/church/join/${u.id}`, { token: u.token, body: { joinCode: code } });
+    for (const u of [B, C, D]) await api('POST', `/church/join/${u.id}`, { token: u.token, body: { joinCode: code } });
     const members = (await api('GET', `/church/${churchId}/members/${A.id}`, { token: A.token })).json.results;
     for (const m of members.filter((x) => x.status === 'pending')) await api('POST', `/church/${churchId}/members/approve/${A.id}`, { token: A.token, body: { memberId: m.memberId } });
 
@@ -113,13 +114,106 @@ async function main() {
     const reqId = bIn.incoming[0].id;
     check("Owen cannot answer Russ's request", (await api('POST', `/church/borrow/answer/${A.id}`, { token: A.token, body: { id: reqId, accept: true } })).status === 404);
     check("Russ cannot use Owen's id in the URL: 403", (await api('POST', `/church/borrow/answer/${A.id}`, { token: B.token, body: { id: reqId, accept: true } })).status === 403);
-    check('Russ accepts', (await api('POST', `/church/borrow/answer/${B.id}`, { token: B.token, body: { id: reqId, accept: true } })).status === 200);
+    const yes = await api('POST', `/church/borrow/answer/${B.id}`, { token: B.token, body: { id: reqId, accept: true } });
+    check('Russ accepts', yes.status === 200 && yes.json.markedOut === true, JSON.stringify(yes.json));
+    const mrow = (await q(dbs.communitylibrary, 'SELECT * FROM movies WHERE id=?', [rm.id]))[0];
+    check('1.11.28: accepting marks the whole movie set Out to Owen Sharer (disc and both films)',
+      mrow.io === 0 && mrow.who === 'Owen Sharer' && mrow.io1 === 0 && mrow.io2 === 0 && mrow.who1 === 'Owen Sharer' && mrow.who2 === 'Owen Sharer' && mrow.io3 === 1, JSON.stringify(mrow));
+    const afterYes = (await api('GET', `/church/shared-library/${A.id}`, { token: A.token })).json;
+    check('1.11.28: the shared card now shows the set as not available', (afterYes.movies.find((m) => m.name === 'Russ Set') || {}).available === false, JSON.stringify(afterYes.movies));
+    check('answering the same request again: 404', (await api('POST', `/church/borrow/answer/${B.id}`, { token: B.token, body: { id: reqId, accept: true } })).status === 404);
+    check('asking for a set that is now Out: 409', (await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'movie', ref: mv.ref } })).status === 409);
     check('Owen sees Yes', (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing[0].status === 'accepted');
     check('Owen clears it', (await api('POST', `/church/borrow/clear/${A.id}`, { token: A.token, body: { id: reqId } })).status === 200
       && (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing.length === 0);
+    check("1.11.28: clearing hides it from Owen only; Russ still sees it, the row is kept",
+      (await api('GET', `/church/borrow/${B.id}`, { token: B.token })).json.incoming.some((x) => x.id === reqId)
+      && (await q(dbs.church, 'SELECT id FROM borrow_requests WHERE id=?', [reqId])).length === 1);
+    await q(dbs.communitylibrary, 'UPDATE movies SET io=1, who=?, io1=1, io2=1, who1=?, who2=? WHERE id=?', ['In Library', 'In Library', 'In Library', rm.id]);   // Russ gets it back
     const again = await api('POST', `/church/borrow/request/${A.id}`, { token: A.token, body: { kind: 'movie', ref: mv.ref } });
     const cid = (await api('GET', `/church/borrow/${A.id}`, { token: A.token })).json.outgoing[0].id;
     check('Owen cancels a pending request', again.status === 201 && (await api('POST', `/church/borrow/cancel/${A.id}`, { token: A.token, body: { id: cid } })).status === 200);
+
+
+    section('1.11.28: accepting reserves the item, and the edges around it');
+    const lib = (title, extra = {}) => api('POST', `/communitylibrary/books/add/${B.id}`, { token: B.token, body: { title, author: 'X', io: 'In', who: '', lost: 'No', ...extra } });
+    const refOf = async (title) => (await q(dbs.communitylibrary, 'SELECT id FROM books WHERE user_id=? AND title=? ORDER BY id', [B.id, title]));
+    const askBook = (U, ref, note) => api('POST', `/church/borrow/request/${U.id}`, { token: U.token, body: { kind: 'book', ref, note } });
+    const answer = (id, accept) => api('POST', `/church/borrow/answer/${B.id}`, { token: B.token, body: { id, accept } });
+    const incomingOf = async () => (await api('GET', `/church/borrow/${B.id}`, { token: B.token })).json.incoming;
+    await api('POST', `/church/${churchId}/library/share/${D.id}`, { token: D.token, body: { share: true } });
+
+    // two people ask for the same book; Yes to one closes the other
+    await lib('Russ Book Beta');
+    const beta = (await refOf('Russ Book Beta'))[0].id;
+    check('Owen and Dana both can ask for the same book', (await askBook(A, beta)).status === 201 && (await askBook(D, beta)).status === 201);
+    let inc = await incomingOf();
+    const fromA = inc.find((x) => x.from === 'Owen Sharer' && x.title === 'Russ Book Beta');
+    const fromD = inc.find((x) => x.from === 'Dana Sharer' && x.title === 'Russ Book Beta');
+    check('Russ sees both requests', fromA && fromD);
+    check('Russ accepts Owen', (await answer(fromA.id, true)).status === 200);
+    const brow = (await q(dbs.communitylibrary, 'SELECT io, who, lost FROM books WHERE id=?', [beta]))[0];
+    check('the book is now Out to Owen Sharer', brow.io === 0 && brow.who === 'Owen Sharer', JSON.stringify(brow));
+    inc = await incomingOf();
+    const dAfter = inc.find((x) => x.id === fromD.id);
+    check("Dana's request was closed by the system (declined, auto)", dAfter && dAfter.status === 'declined' && dAfter.auto === true, JSON.stringify(dAfter));
+    const dOut = (await api('GET', `/church/borrow/${D.id}`, { token: D.token })).json.outgoing.find((x) => x.id === fromD.id);
+    check('Dana sees it as closed, not as a personal No', dOut && dOut.status === 'declined' && dOut.auto === true);
+    check("Russ cannot accept Dana's closed request: 404", (await answer(fromD.id, true)).status === 404);
+    check('Dana asking again for the Out book: 409', (await askBook(D, beta)).status === 409);
+
+    // a real No starts a cooldown that clearing the row cannot dodge
+    await lib('Russ Book Gamma');
+    const gamma = (await refOf('Russ Book Gamma'))[0].id;
+    await askBook(D, gamma);
+    const gReq = (await incomingOf()).find((x) => x.from === 'Dana Sharer' && x.title === 'Russ Book Gamma');
+    check('Russ says no', (await answer(gReq.id, false)).status === 200);
+    check('the book stays In after a No', (await q(dbs.communitylibrary, 'SELECT io FROM books WHERE id=?', [gamma]))[0].io === 1);
+    const redo = await askBook(D, gamma);
+    check('Dana asking again right after a No: 429', redo.status === 429 && /days/.test(redo.json.error || ''), JSON.stringify(redo));
+    const dg = (await api('GET', `/church/borrow/${D.id}`, { token: D.token })).json.outgoing.find((x) => x.title === 'Russ Book Gamma');
+    await api('POST', `/church/borrow/clear/${D.id}`, { token: D.token, body: { id: dg.id } });
+    check('clearing the No does not lift the cooldown: still 429', (await askBook(D, gamma)).status === 429);
+    await q(dbs.church, 'UPDATE borrow_requests SET answeredAt = (NOW() - INTERVAL 8 DAY) WHERE id=?', [gReq.id]);
+    check('after the cooldown Dana can ask again: 201', (await askBook(D, gamma)).status === 201);
+
+    // two books with the same title are separate items
+    await lib('Russ Twin'); await lib('Russ Twin');
+    const twins = await refOf('Russ Twin');
+    check('same title, different book: both can be asked for', (await askBook(A, twins[0].id)).status === 201 && (await askBook(A, twins[1].id)).status === 201);
+    check('same book twice: 409', (await askBook(A, twins[0].id)).status === 409);
+
+    // asker left the sharing group before the owner said Yes
+    await lib('Russ Book Delta');
+    const delta = (await refOf('Russ Book Delta'))[0].id;
+    await askBook(D, delta);
+    const dReq = (await incomingOf()).find((x) => x.from === 'Dana Sharer' && x.title === 'Russ Book Delta');
+    await api('POST', `/church/${churchId}/library/share/${D.id}`, { token: D.token, body: { share: false } });
+    const late = await answer(dReq.id, true);
+    check('Yes to someone who stopped sharing: 409 and the request is closed', late.status === 409, JSON.stringify(late.json));
+    check('the book stays In', (await q(dbs.communitylibrary, 'SELECT io FROM books WHERE id=?', [delta]))[0].io === 1);
+    check('the request is closed, not left pending', (await q(dbs.church, 'SELECT status FROM borrow_requests WHERE id=?', [dReq.id]))[0].status === 'declined');
+    await api('POST', `/church/${churchId}/library/share/${D.id}`, { token: D.token, body: { share: true } });
+
+    // double click: two Yes at once, one wins
+    await lib('Russ Book Epsilon');
+    const eps = (await refOf('Russ Book Epsilon'))[0].id;
+    await askBook(A, eps);
+    const eReq = (await incomingOf()).find((x) => x.from === 'Owen Sharer' && x.title === 'Russ Book Epsilon');
+    const both = await Promise.all([answer(eReq.id, true), answer(eReq.id, true)]);
+    check('two Yes at the same moment: exactly one wins', both.map((x) => x.status).sort().join() === '200,404', JSON.stringify(both.map((x) => x.status)));
+    check('the book is Out to Owen once', (await q(dbs.communitylibrary, 'SELECT io, who FROM books WHERE id=?', [eps]))[0].who === 'Owen Sharer');
+
+    // a lost or already-Out book cannot be reserved by a stale Yes
+    await lib('Russ Book Zeta');
+    const zeta = (await refOf('Russ Book Zeta'))[0].id;
+    await askBook(A, zeta);
+    const zReq = (await incomingOf()).find((x) => x.from === 'Owen Sharer' && x.title === 'Russ Book Zeta');
+    await q(dbs.communitylibrary, "UPDATE books SET io=0, who='Neighbour' WHERE id=?", [zeta]);   // Russ lent it by hand meanwhile
+    const stale = await answer(zReq.id, true);
+    check('Yes after Russ lent it by hand: 409, borrower name not overwritten',
+      stale.status === 409 && (await q(dbs.communitylibrary, 'SELECT who FROM books WHERE id=?', [zeta]))[0].who === 'Neighbour', JSON.stringify(stale.json));
+    check('no user ids in the lists (new fields)', !/requester_id|user_id/.test(JSON.stringify(await incomingOf())));
 
     section('Switching off');
     await api('POST', `/church/${churchId}/library/share/${B.id}`, { token: B.token, body: { share: false } });
@@ -131,7 +225,8 @@ async function main() {
     section('Cleanup');
     try {
       if (churchId) await q(dbs.church, 'DELETE FROM churches WHERE id=?', [churchId]);
-      await q(dbs.church, 'DELETE FROM borrow_requests WHERE title IN (?)', [['Russ Set', 'Russ Book Alpha']]);
+      const ids = (await q(dbs.gateway || dbs.owenenterprises, 'SELECT id FROM users WHERE userName IN (?)', [Object.values(names)])).map((x) => x.id);
+      if (ids.length) await q(dbs.church, 'DELETE FROM borrow_requests WHERE user_id IN (?) OR requester_id IN (?)', [ids, ids]);
       const deleteUser = require('../db/maintenance/deleteUser');
       for (const n of Object.values(names)) { try { await deleteUser(n, true, () => {}); console.log(`  cleanup: removed ${n}`); } catch (e) { if (!/no user named/.test(e.message)) console.log(`  cleanup: ${n}: ${e.message}`); } }
     } catch (e) { console.log(`  cleanup problem: ${e.message}`); }

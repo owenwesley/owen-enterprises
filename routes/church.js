@@ -62,10 +62,13 @@ const {
   setShareLibrary, selectSharingMembers, selectTransferTarget, setRole,
   setShareContact, selectContactSharers, selectLibrarySharers,
 } = require('../db/sql/church/members');
-const { selectSharedBooks, selectSharedMovies, selectBookForBorrow, selectMovieForBorrow } = require('../db/sql/church/library');
 const {
-  insertBorrow, selectPendingDuplicate, countPendingByRequester, selectIncoming, selectOutgoing,
-  answerBorrow, cancelBorrow, clearBorrow,
+  selectSharedBooks, selectSharedMovies, selectBookForBorrow, selectMovieForBorrow, reserveBook, reserveMovieSql,
+} = require('../db/sql/church/library');
+const {
+  BORROW_COOLDOWN_DAYS, insertBorrow, selectPendingDuplicate, selectRecentDecline, countPendingByRequester,
+  selectIncoming, selectOutgoing, selectOwnPending, answerBorrow, declineOthersForItem, cancelBorrow, clearBorrow,
+  purgeBorrow,
 } = require('../db/sql/church/borrow');
 const { selectAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement } = require('../db/sql/church/announcements');
 
@@ -538,8 +541,11 @@ router.post('/borrow/request/:user_id', async (req, res) => {
     const item = rows[0];
     if (!item) return res.status(404).json({ error: 'That item is not shared with you.' });
     if (item.io !== 1 || item.lost) return res.status(409).json({ error: 'That item is out right now.' });
-    const [dup] = await db.promise().query(selectPendingDuplicate, [req.user.id, item.user_id, kind, item.title]);
+    const [dup] = await db.promise().query(selectPendingDuplicate, [req.user.id, item.user_id, kind, item.id]);
     if (dup.length) return res.status(409).json({ error: 'You already asked for this one.' });
+    const [declined] = await db.promise().query(selectRecentDecline, [req.user.id, item.user_id, kind, item.id]);
+    if (declined.length) return res.status(429).json({ error: `The owner said no to this one recently. You can ask again after ${BORROW_COOLDOWN_DAYS} days.` });
+    db.promise().query(purgeBorrow).catch(() => { /* housekeeping only */ });
     const [[cnt]] = await db.promise().query(countPendingByRequester, [req.user.id]);
     if (cnt.n >= BORROW_PENDING_MAX) return res.status(429).json({ error: 'You have too many open requests. Cancel some first.' });
     await db.promise().query(insertBorrow, [item.user_id, req.user.id, kind, item.id, item.title, note]);
@@ -556,8 +562,8 @@ router.get('/borrow/:user_id', async (req, res) => {
     const [out] = await db.promise().query(selectOutgoing, [req.user.id]);
     const names = await personName([...new Set([...inc.map((r) => r.requester_id), ...out.map((r) => r.user_id)])]);
     return res.json({
-      incoming: inc.map((r) => ({ id: r.id, from: names.get(r.requester_id) || 'Someone', kind: r.kind, title: r.title, note: r.note, status: r.status, createdAt: r.createdAt })),
-      outgoing: out.map((r) => ({ id: r.id, to: names.get(r.user_id) || 'Someone', kind: r.kind, title: r.title, status: r.status, createdAt: r.createdAt })),
+      incoming: inc.map((r) => ({ id: r.id, from: names.get(r.requester_id) || 'Someone', kind: r.kind, title: r.title, note: r.note, status: r.status, auto: !!r.auto, createdAt: r.createdAt })),
+      outgoing: out.map((r) => ({ id: r.id, to: names.get(r.user_id) || 'Someone', kind: r.kind, title: r.title, status: r.status, auto: !!r.auto, createdAt: r.createdAt })),
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -565,13 +571,48 @@ router.get('/borrow/:user_id', async (req, res) => {
 });
 
 // POST /church/borrow/answer/:user_id   { id, accept }   the owner answers a pending request
+// A Yes does real work (1.11.28): it checks the asker is still in a church that shares with the owner,
+// then marks the item Out to the asker in one guarded statement (so two Yes answers can never both
+// win) and closes every other open request for the same item. A No just records the answer.
 router.post('/borrow/answer/:user_id', async (req, res) => {
   try {
     const { id, accept } = req.body || {};
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Choose a request.' });
-    const [r] = await db.promise().query(answerBorrow, [accept ? 'accepted' : 'declined', id, req.user.id]);
-    if (!r.affectedRows) return res.status(404).json({ error: 'Request not found.' });
-    return res.json({ message: accept ? 'Accepted.' : 'Declined.' });
+    const [[row]] = await db.promise().query(selectOwnPending, [id, req.user.id]);
+    if (!row) return res.status(404).json({ error: 'Request not found.' });
+    if (!accept) {
+      const [r] = await db.promise().query(answerBorrow, ['declined', 0, id, req.user.id]);
+      if (!r.affectedRows) return res.status(404).json({ error: 'Request not found.' });
+      return res.json({ message: 'Declined.' });
+    }
+    // Same visibility rule as asking: seen from the asker, the owner must still be a sharing member.
+    const [sharers] = await db.promise().query(selectLibrarySharers, [row.requester_id, row.requester_id]);
+    if (!sharers.some((x) => x.user_id === req.user.id)) {
+      await db.promise().query(answerBorrow, ['declined', 1, id, req.user.id]);
+      return res.status(409).json({ error: 'That person is no longer in a church that shares with you, so the request was closed.' });
+    }
+    // Claim the request first, then the item; if the item is gone, close the request again.
+    const [claim] = await db.promise().query(answerBorrow, ['accepted', 0, id, req.user.id]);
+    if (!claim.affectedRows) return res.status(404).json({ error: 'Request not found.' });
+    const names = await personName([row.requester_id]);
+    const who = names.get(row.requester_id) || 'A church member';
+    let reserved = 0;
+    if (row.kind === 'book') {
+      [{ affectedRows: reserved }] = await library.promise().query(reserveBook, [who, row.item_id, req.user.id]);
+    } else {
+      const [mrows] = await library.promise().query(selectMovieForBorrow, [row.item_id, [req.user.id]]);
+      if (mrows[0]) {
+        const { sql, slots } = reserveMovieSql(mrows[0].numMovie);
+        [{ affectedRows: reserved }] = await library.promise().query(sql, [who, ...Array(slots).fill(who), row.item_id, req.user.id]);
+      }
+    }
+    if (!reserved) {
+      await db.promise().query(
+        "UPDATE borrow_requests SET status='declined', auto=1, answeredAt=NOW() WHERE id=? AND user_id=?", [id, req.user.id]);
+      return res.status(409).json({ error: 'That item is not available any more (it is out, lost or removed), so the request was closed.' });
+    }
+    await db.promise().query(declineOthersForItem, [req.user.id, row.kind, row.item_id, id]);
+    return res.json({ message: `Accepted. "${row.title}" is now marked Out to ${who}.`, markedOut: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -595,7 +636,7 @@ router.post('/borrow/clear/:user_id', async (req, res) => {
   try {
     const { id } = req.body || {};
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Choose a request.' });
-    await db.promise().query(clearBorrow, [id, req.user.id, req.user.id]);
+    await db.promise().query(clearBorrow, [req.user.id, req.user.id, id, req.user.id, req.user.id]);
     return res.json({ message: 'Cleared.' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
