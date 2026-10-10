@@ -16,6 +16,7 @@ const { hipaaGate } = require('./middleware/hipaaGate');
 const initDatabases= require('./db/init');
 const { scheduleRetention } = require('./db/retention');
 const { scheduleRebuild } = require('./db/maintenance/scheduleRebuild');
+const { runMigrateOnStart } = require('./scripts/migrateImages');
 const migrateDates = require('./db/migrateDates');
 const migrateInsulinColumns = require('./db/migrateInsulinColumns');
 const migrateMovieSlots = require('./db/migrateMovieSlots');
@@ -206,6 +207,10 @@ initDatabases()
     // to change). Does nothing unless MAINTENANCE_REBUILD_ENABLED=true — see
     // db/maintenance/scheduleRebuild.js.
     scheduleRebuild();
+    // One-time move of pictures from images/ into client/public/images/ (and a copy into
+    // client/build/images so they are served at once). Does nothing unless
+    // IMAGE_MIGRATION_ENABLED=true; runs once — see scripts/migrateImages.js.
+    runMigrateOnStart();
   })
   .catch((e) => {
     console.error('Fatal: database initialisation failed —', e.message);

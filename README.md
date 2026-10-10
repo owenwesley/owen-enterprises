@@ -85,6 +85,7 @@ JWT_SECRET=a-long-random-string
 | `DB_MEETINGS` | `meetings` | |
 | `DB_CHURCH` | `church` | Church module: `churches` and `members`. A **fifth** database; created automatically |
 | `MAINTENANCE_REBUILD_ENABLED` | *unset (off)* | Set `true` to run the weekly table rebuild **and id renumbering** (1..N, no gaps) — see the 1.10.4 entry in *Version history* |
+| `IMAGE_MIGRATION_ENABLED` | *unset (off)* | Set `true` for a **one-time** move of pictures from `images/` into `client/public/images/` (and a copy into `client/build/images`) when the server next starts. Placeholders are left alone. Marker file `images/.migrated-to-public` stops it repeating. See `scripts/migrateImages.js` |
 | `MAINTENANCE_TZ` | `America/Los_Angeles` | Time zone the Sunday 12-4 AM window is measured in |
 | `JWT_SECRET` | *insecure built-in fallback* | **Always set your own** (`npm run secret` prints one; changing it signs everyone out once). Tokens last 8 hours |
 | `CORS_ORIGIN` | *empty = any website may call the API* | **Set in production**: the exact address(es) people use, comma-separated |
@@ -821,3 +822,5 @@ Please read these before putting real users' data on it.
 - **In React code** use `client/src/utils/mediaImages.js`: `dvdImage('x.jpg')`, `bluRayImage(..)`, `movieImage('HD-DVD', 'x.jpg')`, `bookImage(..)`, `placeholderImage('movie' | 'book', 'light' | 'dark')`.
 - **Dev:** `vite.config.js` serves a `/images/...` file from `client/public` when it exists there, otherwise forwards the request to Express.
 - File names are case-sensitive on the Linux host.
+
+**One-time image migration:** `node scripts/migrateImages.js --dry-run` (preview), then `node scripts/migrateImages.js`. It moves real pictures from the root `images/` folder into `client/public/images/` (movies keep their media folder, books go to `books/`), and leaves placeholders alone. Rebuild the client afterwards.
