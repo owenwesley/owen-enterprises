@@ -16,6 +16,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContentText from '@mui/material/DialogContentText';
 import { FitDialog, FitContent } from '../../components/DialogFit';
 import { useChurch } from './hooks/useChurch';
+import { ShareCard, AskDialog, useBorrow, BorrowRequests } from '../communityLibrary/SharedResults';
 
 // Layout rule: the page itself never scrolls. This fills .app-content; the
 // header (title, church picker, tabs) and the footer buttons stay put and only
@@ -55,6 +56,8 @@ export default function ChurchPage() {
   const [tab, setTab] = useState(0);
   const [members, setMembers] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const borrow = useBorrow();
+  const [ask, setAsk] = useState(null);
   const [news, setNews] = useState([]);
   const [fTitle, setFTitle] = useState('');
   const [fBody, setFBody] = useState('');
@@ -356,22 +359,23 @@ export default function ChurchPage() {
                 <div key={p.name} style={{ marginBottom: '16px' }}>
                   <Typography sx={{ fontWeight: 700, color: '#1a237e' }}>{p.name}{p.isYou ? ' (you)' : ''}</Typography>
                   {p.books.length === 0 && p.movies.length === 0 && <Typography sx={{ color: '#666' }}>Nothing listed.</Typography>}
-                  {p.books.map((b, i) => (
-                    <div key={`b${i}`} style={sxStyles.row}>
-                      <Typography sx={{ flex: '1 1 auto', minWidth: 0 }}>{b.title}{b.author ? ` — ${b.author}` : ''}</Typography>
-                      <Chip size="small" label={b.available ? 'In' : 'Out'} color={b.available ? 'success' : 'default'} />
-                    </div>
-                  ))}
-                  {p.movies.map((m, i) => (
-                    <div key={`m${i}`} style={sxStyles.row}>
-                      <Typography sx={{ flex: '1 1 auto', minWidth: 0 }}>
-                        {m.name}{m.films.length > 1 ? ` (${m.films.map((f) => f.name).join(', ')})` : ''}
-                      </Typography>
-                      <Chip size="small" label={m.available ? 'In' : 'Out'} color={m.available ? 'success' : 'default'} />
-                    </div>
-                  ))}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
+                    {p.books.map((b) => (
+                      <ShareCard key={`b${b.ref}`} kind="book" item={{ ...b, sharedBy: p.name }} title={b.title}
+                        sub={[b.author, b.year].filter(Boolean).join(' · ')} borrow={borrow} onAsk={setAsk}
+                        isYou={p.isYou} canAsk={!!church.shareLibrary} />
+                    ))}
+                    {p.movies.map((m) => (
+                      <ShareCard key={`m${m.ref}`} kind="movie" item={{ ...m, sharedBy: p.name }} title={m.name}
+                        sub={m.films.length > 1 ? m.films.map((f) => f.name).join(', ') : m.media} borrow={borrow} onAsk={setAsk}
+                        isYou={p.isYou} canAsk={!!church.shareLibrary} />
+                    ))}
+                  </div>
                 </div>
               ))}
+              {!church.shareLibrary && catalog.length > 0 && <Typography sx={{ color: '#666', fontSize: '0.8rem' }}>Turn on library sharing to ask to borrow.</Typography>}
+              <BorrowRequests borrow={borrow} />
+              <AskDialog ask={ask} onClose={() => setAsk(null)} onSend={(a, note) => borrow.request(a.kind, a.ref, note)} />
             </Paper>}
           </>
         )}

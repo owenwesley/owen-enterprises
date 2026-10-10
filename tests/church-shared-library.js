@@ -90,6 +90,10 @@ async function main() {
     check("Russ's book is untouched", (await q(dbs.communitylibrary, 'SELECT title FROM books WHERE id=?', [rb.id]))[0]?.title === 'Russ Book Alpha');
     check("Russ's movie is untouched", (await q(dbs.communitylibrary, 'SELECT name FROM movies WHERE id=?', [rm.id]))[0]?.name === 'Russ Set');
 
+    const cat = (await api('GET', `/church/${churchId}/library/${A.id}`, { token: A.token })).json.results || [];
+    const rb2 = (cat.find((x) => x.name === 'Russ Sharer') || { books: [] }).books[0] || {};
+    check('Church page Library tab carries cover and ref too', rb2.img === '/images/secret.png' && Number.isInteger(rb2.ref) && !JSON.stringify(cat).includes('Zebediah'), JSON.stringify(cat));
+
     section('Ask to borrow');
     const mv = (r.json.movies || []).find((m) => m.name === 'Russ Set');
     check('items carry a ref', Number.isInteger(book.ref) && Number.isInteger(mv.ref));

@@ -424,6 +424,8 @@ router.get('/:church_id/library/:user_id', requireChurch('library.view'), async 
       name: names.get(id),
       isYou: id === req.user.id,
       books: books.filter((b) => b.user_id === id).map((b) => ({
+        ref: b.id,
+        img: b.img_url || undefined,
         title: b.title,
         author: b.author,
         year: b.copywrite || undefined,
@@ -436,6 +438,8 @@ router.get('/:church_id/library/:user_id', requireChurch('library.view'), async 
           if (m[`name${i}`]) films.push({ name: m[`name${i}`], img: m[`img${i}`] || undefined, available: m[`io${i}`] === 1 && !m.lost });
         }
         return {
+          ref: m.id,
+          img: m.img_url || undefined,
           name: m.name,
           media: m.featureMedia || undefined,
           available: m.io === 1 && !m.lost,

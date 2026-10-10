@@ -126,7 +126,7 @@ function Cover({ src, alt }) {
   return <CardMedia component="img" sx={{ height: 200, objectFit: 'cover' }} image={src} alt={alt} onError={() => setBad(true)} />;
 }
 
-function ShareCard({ kind, item, title, sub, borrow, onAsk }) {
+export function ShareCard({ kind, item, title, sub, borrow, onAsk, canAsk = true, isYou = false }) {
   const pending = borrow.outgoing.some((r) => r.status === 'pending' && r.kind === kind && r.title === title && r.to === item.sharedBy);
   return (
     <Card sx={cardSx} elevation={3}>
@@ -139,19 +139,19 @@ function ShareCard({ kind, item, title, sub, borrow, onAsk }) {
         {sub ? <Typography sx={{ fontSize: '0.75rem', color: '#555' }}>{sub}</Typography> : null}
       </CardContent>
       <div style={{ padding: '6px 10px', borderTop: '1px solid #e0e0e0', background: '#f5f9ff' }}>
-        <Typography sx={{ fontSize: '0.72rem', color: '#1565c0', fontWeight: 600 }}>{`Owned by ${item.sharedBy}`}</Typography>
+        <Typography sx={{ fontSize: '0.72rem', color: '#1565c0', fontWeight: 600 }}>{isYou ? 'Owned by you' : `Owned by ${item.sharedBy}`}</Typography>
         {item.church ? <Typography sx={{ fontSize: '0.68rem', color: '#555' }}>{item.church}</Typography> : null}
       </div>
-      <CardActions style={{ padding: '4px' }}>
+      {!isYou && canAsk && <CardActions style={{ padding: '4px' }}>
         <Button size="small" fullWidth disabled={pending || !item.available} onClick={() => onAsk({ kind, ref: item.ref, title, owner: item.sharedBy })}>
           {pending ? 'Requested' : item.available ? 'Ask to borrow' : 'Out right now'}
         </Button>
-      </CardActions>
+      </CardActions>}
     </Card>
   );
 }
 
-function AskDialog({ ask, onClose, onSend }) {
+export function AskDialog({ ask, onClose, onSend }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { setNote(''); setBusy(false); }, [ask]);
