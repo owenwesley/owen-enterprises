@@ -27,8 +27,9 @@ import SharedResults from './SharedResults';
 import { useMovies, isCollection, filmCount, collectionSlots, removeFilm, emptyMovie, outSummary, ioLabel } from './hooks/useMovies';
 import { useContacts } from './hooks/useContacts';
 import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
+import { placeholderImage } from '../../utils/mediaImages';
 
-const PLACEHOLDER  = '/images/placeholders/no-movie-light.webp';
+const PLACEHOLDER  = placeholderImage('movie');   // /images/placeholders/no-movie-light.webp
 const MEDIA_TYPES  = ['VHS', 'DVD', 'HD-DVD', 'Blu-Ray'];
 const RATINGS      = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR'];
 const FEATURE_TYPES = ['Double Feature', 'Triple Feature', 'Quadruple Feature', 'Box Set'];

@@ -23,8 +23,9 @@ import { useBooks } from './hooks/useLibrary';
 import { useContacts } from './hooks/useContacts';
 import { useAppContext } from '../../context/AppContext';
 import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
+import { placeholderImage } from '../../utils/mediaImages';
 
-const PLACEHOLDER = '/images/placeholders/no-book-light.webp';
+const PLACEHOLDER = placeholderImage('book');   // /images/placeholders/no-book-light.webp
 
 // "Returned" is a full-width strip above the edit / delete icons (side by side they overflow a 160px card).
 const sxReturned = { fontSize: '0.75rem', lineHeight: 1.6, color: '#1565c0', borderTop: '1px solid #e0e0e0', borderRadius: 0 };

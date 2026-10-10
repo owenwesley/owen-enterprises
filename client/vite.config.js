@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,15 +30,27 @@ export default defineConfig(({ mode }) => {
   // /meetings, /doctor and /admin are both API prefixes and React Router pages.
   // A browser navigation (Accept: text/html, e.g. a refresh on /meetings) must
   // get the app's index.html; fetch() calls from the app go to the API.
+  // Static pictures live in client/public/images/... and are served by Vite itself (in the
+  // build they end up at /images/... too). Pictures people upload are written by the server
+  // into its own images/ folder, so a /images request that is not in client/public still
+  // goes to Express.
+  const publicDir = path.resolve(__dirname, 'public');
+
   const proxy = Object.fromEntries(
     API_PREFIXES.map((prefix) => [
       prefix,
       {
         target,
-        bypass: (req) =>
-          req.headers.accept && req.headers.accept.includes('text/html')
-            ? '/index.html'
-            : undefined,
+        bypass: (req) => {
+          if (req.headers.accept && req.headers.accept.includes('text/html')) return '/index.html';
+          if (prefix === '/images') {
+            let file = '';
+            try { file = decodeURI((req.url || '').split('?')[0]); } catch { return undefined; }
+            const full = path.join(publicDir, file);
+            if (full.startsWith(publicDir + path.sep) && fs.existsSync(full) && fs.statSync(full).isFile()) return file;
+          }
+          return undefined;
+        },
       },
     ])
   );

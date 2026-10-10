@@ -811,3 +811,13 @@ Please read these before putting real users' data on it.
 - Redesigned login, register and landing pages.
 
 **1.3.27** — last standalone BGTracker release.
+
+## Images: where files go (added after 1.11.29)
+
+- **Rule:** the URL never contains `public`. A file in `client/public/images/movies/dvd/x.jpg` is served at `/images/movies/dvd/x.jpg` (dev and production). Always use a leading slash.
+- **Static pictures you add by hand:** `client/public/images/books/`, `client/public/images/movies/{vhs,dvd,hd-dvd,blu-ray}/`, plus the collection folders (`single`, `double-feature`, `triple-feature`, `quadruple-feature`, `boxset`, `boxset-mega-bundle`). Each has a `.gitkeep` so git (and IONOS Deploy Now) keeps the empty folder.
+- **Pictures uploaded in the app** are written by the server into the root `images/` folder (same sub-folders), served by Express at the same `/images/...` URLs. Do NOT move these into `client/public`: the build wipes `client/build`.
+- **Placeholders** exist twice, keep both copies identical: `images/placeholders/` (server copies them when no picture is uploaded) and `client/public/images/placeholders/` (the pages show them). The light ones are grey (#E0E0E0) with black text.
+- **In React code** use `client/src/utils/mediaImages.js`: `dvdImage('x.jpg')`, `bluRayImage(..)`, `movieImage('HD-DVD', 'x.jpg')`, `bookImage(..)`, `placeholderImage('movie' | 'book', 'light' | 'dark')`.
+- **Dev:** `vite.config.js` serves a `/images/...` file from `client/public` when it exists there, otherwise forwards the request to Express.
+- File names are case-sensitive on the Linux host.
