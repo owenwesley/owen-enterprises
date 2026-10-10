@@ -2,6 +2,7 @@ const express = require('express');
 const { formatDateRows } = require('../../utils/dateFormat');
 const { selectReadings } = require('../../db/sql/bgtracker/readings');
 const { bgtracker } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 // Middleware
@@ -19,7 +20,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results: formatDateRows(results) });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

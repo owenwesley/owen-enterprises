@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { bgtracker } = require('../../db/db');
 const { selectMedications } = require('../../db/sql/bgtracker/medications');
+const { serverError } = require('../../utils/serverError');
 
 // Middleware
 router.use('/add', require('./medications/add'));
@@ -17,7 +18,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

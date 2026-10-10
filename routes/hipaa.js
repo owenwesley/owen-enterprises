@@ -12,6 +12,7 @@ const express = require('express');
 const { owenenterprises: db } = require('../db/db');
 const { FORMS } = require('../config/hipaaForms');
 const { bgtrackerEnabled, mfaEnabled, missingConsents, writeAudit } = require('../middleware/hipaaGate');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 const off = (res) => res.status(403).json({ error: 'Forbidden', code: 'BGTRACKER_DISABLED' });
@@ -21,7 +22,7 @@ router.get('/status/:user_id', async (req, res) => {
     const enabled = await bgtrackerEnabled(req.user.id);
     const missing = enabled ? await missingConsents(req.user.id) : [];
     return res.json({ results: { bgtrackerEnabled: enabled, mfaEnabled: enabled ? await mfaEnabled(req.user.id) : false, missing } });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.get('/forms/:user_id', async (req, res) => {
@@ -29,7 +30,7 @@ router.get('/forms/:user_id', async (req, res) => {
     if (!(await bgtrackerEnabled(req.user.id))) return off(res);
     const need = new Set((await missingConsents(req.user.id)).map((m) => m.key));
     return res.json({ results: FORMS.filter((f) => need.has(f.key)) });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/accept/:user_id', async (req, res) => {
@@ -45,7 +46,7 @@ router.post('/accept/:user_id', async (req, res) => {
     await writeAudit({ userId: req.user.id, action: 'CONSENT', resource: `${form.key}@${form.version}`,
       outcome: 'allowed', ip: req.ip });
     return res.json({ message: 'Consent recorded' });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 module.exports = router;

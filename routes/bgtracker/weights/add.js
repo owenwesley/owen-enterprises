@@ -3,6 +3,7 @@ const { toNum } = require('../../../utils/coerce');
 const normalizeDate = require('../../../middleware/normalizeDate');
 const { insertWeights, trimWeights } = require('../../../db/sql/bgtracker/weights');
 const { bgtracker }     = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', normalizeDate, async (req, res) => {
@@ -16,7 +17,7 @@ router.post('/:user_id', normalizeDate, async (req, res) => {
     await bgtracker.promise().query(trimWeights, [req.params.user_id, req.params.user_id]);
     return res.json({ message: 'Weight added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

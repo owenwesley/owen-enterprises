@@ -1,6 +1,7 @@
 const express = require('express');
 const { deleteMedicationById } = require('../../../db/sql/bgtracker/medications');
 const { bgtracker } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 // Deliberately NOT using the deleteMedication export (db/sql/bgtracker/
@@ -12,7 +13,7 @@ router.post('/:user_id', async (req, res) => {
     await bgtracker.promise().query(deleteMedicationById, [req.body.id, req.params.user_id]);
     return res.json({ message: 'Medication deleted' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 module.exports = router;

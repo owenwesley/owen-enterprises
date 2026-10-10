@@ -1,4 +1,5 @@
 /**
+const { serverError } = require('./serverError');
  * utils/dbRespond.js
  *
  * updateReply(res, message) builds the callback for an UPDATE query.
@@ -11,7 +12,7 @@
  */
 function updateReply(res, message) {
   return (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return serverError(res, err);
     if (!result || result.affectedRows === 0) {
       return res.status(404).json({ error: 'Nothing was updated — that row was not found for this user.' });
     }

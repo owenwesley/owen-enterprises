@@ -32,6 +32,7 @@ const { selectUser } = require('../db/sql/users');
 const { verifyTotp, encryptSecret, decryptSecret } = require('../utils/totp');
 const sms = require('../utils/smsVerify');
 const devices = require('../utils/mfaDevices');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 const SECRET = process.env.JWT_SECRET || 'owenenterprises_secret_change_in_prod';
@@ -168,7 +169,7 @@ router.get('/status', authMiddleware, async (req, res) => {
       trustedDevices: on ? await devices.countDevices(req.user.id) : 0,
       textMessagesAvailable: sms.configured(),
     } });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/phone/start', authMiddleware, async (req, res) => {
@@ -192,7 +193,7 @@ router.post('/phone/start', authMiddleware, async (req, res) => {
       `INSERT INTO user_mfa (user_id, secretEnc, pendingPhoneEnc) VALUES (?, '', ?)
        ON DUPLICATE KEY UPDATE pendingPhoneEnc=VALUES(pendingPhoneEnc)`, [req.user.id, encryptSecret(number)]);
     return res.json({ message: 'Code sent.', phoneLast4: number.slice(-4) });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/phone/confirm', authMiddleware, async (req, res) => {
@@ -219,7 +220,7 @@ router.post('/phone/confirm', authMiddleware, async (req, res) => {
       for (const c of recoveryCodes) await p().query('INSERT INTO mfa_recovery_codes (user_id, codeHash) VALUES (?, ?)', [req.user.id, hashCode(c)]);
     }
     return res.json({ message: 'Two-step sign-in is on.', ...(recoveryCodes ? { recoveryCodes } : {}) });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/code/send', authMiddleware, async (req, res) => {
@@ -229,7 +230,7 @@ router.post('/code/send', authMiddleware, async (req, res) => {
     const fail = await textCode(req.user.id, row, req.ip);
     if (fail) return res.status(fail[0]).json({ error: fail[1] });
     return res.json({ sent: true });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/disable', authMiddleware, async (req, res) => {
@@ -250,12 +251,12 @@ router.post('/disable', authMiddleware, async (req, res) => {
     await p().query('DELETE FROM mfa_recovery_codes WHERE user_id=?', [req.user.id]);
     await p().query('DELETE FROM user_mfa WHERE user_id=?', [req.user.id]);
     return res.json({ message: 'Two-step sign-in is off.' });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return serverError(res, e); }
 });
 
 router.post('/devices/forget', authMiddleware, async (req, res) => {
   try { await devices.forgetAll(req.user.id); return res.json({ message: 'All remembered devices were forgotten.' }); }
-  catch (e) { return res.status(500).json({ error: e.message }); }
+  catch (e) { return serverError(res, e); }
 });
 
 module.exports = router;

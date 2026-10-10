@@ -1,6 +1,7 @@
 const express = require('express');
 const { insertContact } = require('../../../db/sql/communitylibrary/contacts');
 const { communitylibrary } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -13,7 +14,7 @@ router.post('/:user_id', async (req, res) => {
     );
     return res.json({ message: 'Contact added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

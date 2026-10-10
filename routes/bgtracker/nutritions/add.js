@@ -2,6 +2,7 @@ const express = require('express');
 const normalizeDate = require('../../../middleware/normalizeDate');
 const { insertNutritions } = require('../../../db/sql/bgtracker/nutritions');
 const { bgtracker } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 const MEAL_SUFFIXES = ['B', 'L', 'D', 'BB', 'Bed'];
@@ -29,7 +30,7 @@ router.post('/:user_id', normalizeDate, async (req, res) => {
     await bgtracker.promise().query(insertNutritions, buildParams(req.params.user_id, b));
     return res.json({ message: 'Nutrition added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

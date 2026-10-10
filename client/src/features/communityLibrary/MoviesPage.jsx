@@ -28,10 +28,13 @@ import { useMovies, isCollection, filmCount, collectionSlots, removeFilm, emptyM
 import { useContacts } from './hooks/useContacts';
 import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
 
-const PLACEHOLDER  = 'https://via.placeholder.com/140x200?text=No+Poster';
+const PLACEHOLDER  = '/images/placeholders/no-movie-light.webp';
 const MEDIA_TYPES  = ['VHS', 'DVD', 'HD-DVD', 'Blu-Ray'];
 const RATINGS      = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR'];
 const FEATURE_TYPES = ['Double Feature', 'Triple Feature', 'Quadruple Feature', 'Box Set'];
+
+// "Returned" is a full-width strip above the edit / delete icons (side by side they overflow a 160px card).
+const sxReturned = { fontSize: '0.75rem', lineHeight: 1.6, color: '#1565c0', borderTop: '1px solid #e0e0e0', borderRadius: 0 };
 
 const sxStyles = {
   root:      { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -315,7 +318,7 @@ function MovieDialog({ open, movie, onClose, onChange, onSave, onFileSelect, onF
 }
 
 // ── Single movie card ──────────────────────────────────────────────────────────
-function SingleMovieCard({ movie, onEdit, onDelete }) {
+function SingleMovieCard({ movie, onEdit, onDelete, onReturned }) {
   const io = ioLabel(movie.io), lost = lostLabel(movie.lost);
   return (
     <Card sx={sxStyles.card} elevation={3}>
@@ -341,6 +344,9 @@ function SingleMovieCard({ movie, onEdit, onDelete }) {
           <Typography style={{ fontSize: '0.72rem', color: '#b71c1c' }}>{outSummary(movie)}</Typography>
         )}
       </CardContent>
+      {io === 'Out' && lost !== 'Yes' && (
+        <Button size="small" fullWidth sx={sxReturned} onClick={onReturned} aria-label={`Mark ${movie.name} returned`}>Returned</Button>
+      )}
       <CardActions style={{ padding: '0 4px 4px' }}>
         <IconButton size="small" onClick={onEdit}><EditIcon fontSize="small" /></IconButton>
         <IconButton size="small" onClick={onDelete}><DeleteIcon fontSize="small" /></IconButton>
@@ -350,7 +356,7 @@ function SingleMovieCard({ movie, onEdit, onDelete }) {
 }
 
 // ── Collection card (Double/Triple/Quad Feature, Box Set) — click to open films ─
-function CollectionCard({ movie, onOpen, onEdit, onDelete }) {
+function CollectionCard({ movie, onOpen, onEdit, onDelete, onReturned }) {
   const io = ioLabel(movie.io), lost = lostLabel(movie.lost);
 
   return (
@@ -377,6 +383,9 @@ function CollectionCard({ movie, onOpen, onEdit, onDelete }) {
         <Chip size="small" label={lost === 'Yes' ? 'Lost' : io}
           color={io === 'In' && lost !== 'Yes' ? 'primary' : 'secondary'} />
       </span>
+      {io === 'Out' && lost !== 'Yes' && (
+        <Button size="small" fullWidth sx={sxReturned} onClick={onReturned} aria-label={`Mark ${movie.name} returned`}>Returned</Button>
+      )}
       <CardActions style={{ padding: '0 4px 4px' }}>
         <IconButton size="small" onClick={onEdit}><EditIcon fontSize="small" /></IconButton>
         <IconButton size="small" onClick={onDelete}><DeleteIcon fontSize="small" /></IconButton>
@@ -496,7 +505,7 @@ export default function MoviesPage() {
   const { state } = useAppContext();
   const { user } = state;
   const {
-    movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie,
+    movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie, markReturned,
   } = useMovies();
   const { contacts, getContacts } = useContacts();
 
@@ -645,6 +654,7 @@ export default function MoviesPage() {
                 onOpen={() => setFilmsId(movie.id)}
                 onEdit={() => openEdit(movie)}
                 onDelete={() => confirmDelete(movie, i)}
+                onReturned={() => { if (window.confirm(`Mark all ${filmCount(movie)} films of "${movie.name}" as returned?`)) markReturned(movie.id); }}
               />
             ) : (
               <SingleMovieCard
@@ -652,6 +662,7 @@ export default function MoviesPage() {
                 movie={movie}
                 onEdit={() => openEdit(movie)}
                 onDelete={() => confirmDelete(movie, i)}
+                onReturned={() => markReturned(movie.id)}
               />
             );
           })}

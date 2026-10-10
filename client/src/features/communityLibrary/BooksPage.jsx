@@ -24,7 +24,10 @@ import { useContacts } from './hooks/useContacts';
 import { useAppContext } from '../../context/AppContext';
 import { FitDialog, FitContent, FieldGrid, Full, ImagePick } from '../../components/DialogFit';
 
-const PLACEHOLDER = 'https://via.placeholder.com/140x200?text=No+Cover';
+const PLACEHOLDER = '/images/placeholders/no-book-light.webp';
+
+// "Returned" is a full-width strip above the edit / delete icons (side by side they overflow a 160px card).
+const sxReturned = { fontSize: '0.75rem', lineHeight: 1.6, color: '#1565c0', borderTop: '1px solid #e0e0e0', borderRadius: 0 };
 
 const sxStyles = {
   root:    { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -137,7 +140,7 @@ function BookDialog({ open, book, onClose, onChange, onSave, onFileSelect, conta
 export default function BooksPage() {
   const { state } = useAppContext();
   const { user } = state;
-  const { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook } = useBooks();
+  const { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook, markReturned } = useBooks();
   const { contacts, getContacts } = useContacts();
 
   const [search,     setSearch]     = useState('');
@@ -235,6 +238,9 @@ export default function BooksPage() {
                 </Typography>
               )}
             </CardContent>
+            {ioLabel(book.io) === 'Out' && lostLabel(book.lost) !== 'Yes' && (
+              <Button size="small" fullWidth sx={sxReturned} onClick={() => markReturned(book.id)} aria-label={`Mark ${book.title} returned`}>Returned</Button>
+            )}
             <CardActions style={{ padding: '0 4px 4px' }}>
               <IconButton size="small" onClick={() => openEdit(book)}><EditIcon fontSize="small" /></IconButton>
               <IconButton size="small" onClick={() => { if (window.confirm(`Delete \"${book.title}\"?`)) deleteBook(realIndex(book)); }}><DeleteIcon fontSize="small" /></IconButton>

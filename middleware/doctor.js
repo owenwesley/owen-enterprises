@@ -1,4 +1,5 @@
 const { owenenterprises: db } = require('../db/db');
+const { serverError } = require('../utils/serverError');
 
 /**
  * Doctor authorisation. Runs AFTER middleware/auth.js (needs req.user.id).
@@ -20,7 +21,7 @@ async function loadDoctor(req, res, next) {
     req.doctor = { id: u.id, doctorStatus: u.doctorStatus };
     return next();
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 }
 

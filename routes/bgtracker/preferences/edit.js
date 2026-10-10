@@ -1,5 +1,6 @@
 const express = require('express');
 const { savePreference } = require('./_save');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 // POST /bgtracker/preferences/edit/:user_id
@@ -10,7 +11,7 @@ router.post('/:user_id', async (req, res) => {
     await savePreference(req.params.user_id, req.body);
     return res.json({ message: 'Preference updated' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 module.exports = router;

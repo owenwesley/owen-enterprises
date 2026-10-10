@@ -5,6 +5,7 @@ const {
   selectFeaturePreference,
   upsertFeaturePreference,
 } = require('../../db/sql/owenenterprises/featurePreferences');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 // GET /owenenterprises/features/:user_id
@@ -25,7 +26,7 @@ router.get('/:user_id', async (req, res) => {
       results: { user_id, chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1, chkChurch: 0 },
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -48,7 +49,7 @@ router.post('/edit/:user_id', async (req, res) => {
     );
     return res.json({ message: 'Feature preferences updated' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

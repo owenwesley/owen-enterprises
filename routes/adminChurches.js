@@ -16,6 +16,7 @@
 const express = require('express');
 const { church: db, owenenterprises: gateway } = require('../db/db');
 const { requireAdmin } = require('../middleware/admin');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 const VALID_STATUS = new Set(['pending', 'approved', 'rejected', 'suspended']);
@@ -52,7 +53,7 @@ router.get('/', requireAdmin, async (req, res) => {
     });
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -80,7 +81,7 @@ router.post('/:id/status', requireAdmin, async (req, res) => {
     return res.json({ message: `Church status set to ${status}`, removedMembers });
   } catch (e) {
     if (conn) { try { await conn.rollback(); } catch { /* connection gone */ } }
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   } finally {
     if (conn) conn.release();
   }
@@ -94,7 +95,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: 'No church with that id' });
     return res.json({ message: 'Church deleted' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 

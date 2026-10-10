@@ -1,4 +1,5 @@
 const { owenenterprises: db } = require('../db/db');
+const { serverError } = require('../utils/serverError');
 
 /**
  * Admin authorisation. Runs AFTER middleware/auth.js (needs req.user.id).
@@ -17,7 +18,7 @@ async function requireAdmin(req, res, next) {
     }
     return next();
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 }
 

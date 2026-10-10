@@ -5,6 +5,7 @@ const {
   selectClinics, insertClinic, updateClinic, deleteClinicById, updateDoctorClinic,
   selectPendingClinicRequests, approveClinicRequest, clearClinicRequest,
 } = require('../db/sql/owenenterprises/clinics');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.get('/doctors', requireAdmin, async (req, res) => {
     );
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -67,7 +68,7 @@ router.post('/doctors/:id/status', requireAdmin, async (req, res) => {
       ...(revokedLinks > 0 && { revokedLinks }),
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -88,7 +89,7 @@ router.get('/clinics', requireAdmin, async (req, res) => {
     const [results] = await db.promise().query(selectClinics);
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -103,7 +104,7 @@ router.post('/clinics', requireAdmin, async (req, res) => {
     const [result] = await db.promise().query(insertClinic, [name, address]);
     return res.status(201).json({ message: 'Clinic added', id: result.insertId });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -119,7 +120,7 @@ router.put('/clinics/:id', requireAdmin, async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'No clinic with that id' });
     return res.json({ message: 'Clinic updated' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -150,7 +151,7 @@ router.delete('/clinics/:id', requireAdmin, async (req, res) => {
     return res.json({ message: 'Clinic deleted' });
   } catch (e) {
     if (conn) { try { await conn.rollback(); } catch (_) { /* connection already gone */ } }
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   } finally {
     if (conn) conn.release();
   }
@@ -184,7 +185,7 @@ router.post('/doctors/:id/clinic', requireAdmin, async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'No doctor account with that id' });
     return res.json({ message: clinicId === null ? 'Cleared clinic assignment' : 'Clinic assigned' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -199,7 +200,7 @@ router.get('/clinic-requests', requireAdmin, async (req, res) => {
     const [results] = await db.promise().query(selectPendingClinicRequests);
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -218,7 +219,7 @@ router.post('/clinic-requests/:doctorId/approve', requireAdmin, async (req, res)
     await conn.query(approveClinicRequest, [req.params.doctorId]);
     return res.json({ message: 'Clinic change approved' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -229,7 +230,7 @@ router.post('/clinic-requests/:doctorId/reject', requireAdmin, async (req, res) 
     if (result.affectedRows === 0) return res.status(404).json({ error: 'No doctor account with that id' });
     return res.json({ message: 'Clinic change rejected' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 

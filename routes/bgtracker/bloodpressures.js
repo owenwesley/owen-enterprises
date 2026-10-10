@@ -3,6 +3,7 @@ const { formatDateRows } = require('../../utils/dateFormat');
 const router = express.Router();
 const { selectBloodPressures } = require('../../db/sql/bgtracker/bloodpressures');
 const { bgtracker } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 
 // Middleware
 router.use('/add', require('./bloodpressures/add'));
@@ -18,7 +19,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results: formatDateRows(results) });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

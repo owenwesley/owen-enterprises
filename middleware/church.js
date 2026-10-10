@@ -15,6 +15,7 @@
  * the token, so removing a member or suspending a church takes effect at once.
  */
 const { church: db } = require('../db/db');
+const { serverError } = require('../utils/serverError');
 
 const MEMBER_PERMISSIONS = ['church.view', 'members.view', 'library.view', 'library.share', 'contact.share', 'announcements.view'];
 const PERMISSIONS = {
@@ -61,7 +62,7 @@ function requireChurch(permission) {
       req.church = { id: churchId, role: r.role };
       return next();
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   };
 }

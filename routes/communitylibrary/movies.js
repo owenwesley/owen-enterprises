@@ -1,6 +1,7 @@
 const express = require('express');
 const { selectMovies } = require('../../db/sql/communitylibrary/movies');
 const { communitylibrary } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 router.use('/add',    require('./movies/add'));
@@ -15,7 +16,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

@@ -18,7 +18,9 @@ function fileFilter(req, file, cb) {
   if (IMAGE_MIME_TYPES.has(file.mimetype)) {
     return cb(null, true);
   }
-  cb(new Error(`Unsupported file type: ${file.mimetype}. Please upload an image.`));
+  const err = new Error(`Unsupported file type: ${file.mimetype}. Please upload an image.`);
+  err.status = 400;   // server.js's error handler passes a < 500 status and message through
+  cb(err);
 }
 
 const upload = multer({

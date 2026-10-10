@@ -6,6 +6,7 @@ const {
 } = require('../../db/sql/meetings/memos');
 const { mergeExisting } = require('../../utils/mergeExisting');
 const { meetings: db } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 // GET /memos/:user_id
@@ -17,7 +18,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -28,7 +29,7 @@ router.post('/add/:user_id', async (req, res) => {
     await db.promise().query(insertMemo, [req.params.user_id, name || 'N/A']);
     return res.json({ message: 'Memo added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -52,7 +53,7 @@ router.post('/delete/:user_id', async (req, res) => {
     await db.promise().query(deleteMemo, [req.body.id, req.params.user_id]);
     return res.json({ message: 'Memo deleted' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

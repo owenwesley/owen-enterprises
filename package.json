@@ -1,12 +1,12 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.11.28",
+  "version": "1.11.29",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "server": "nodemon server.js",
     "client": "npm run dev --prefix client",
-    "check": "node tests/prerelease-check.js",
+    "check": "node tests/run-all.js",
     "check:church": "node tests/church-role-matrix.js",
     "check:church2": "node tests/church-step2.js",
     "check:church3": "node tests/church-step3.js",
@@ -16,7 +16,12 @@
     "check:hipaa": "node tests/hipaa-gate.js",
     "check:mfa": "node tests/mfa.js",
     "check:twilio": "node tests/twilio-request.js",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "secret": "node scripts/genSecret.js",
+    "check:church7": "node tests/church-borrow-extras.js",
+    "check:ui": "node tests/ui-borrow.js",
+    "check:hardening": "node tests/hardening.js",
+    "check:basic": "node tests/prerelease-check.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,12 +29,14 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "mysql2": "^3.6.0",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^1.14.10"
   }
 }

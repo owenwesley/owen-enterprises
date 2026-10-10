@@ -3,6 +3,7 @@ const { lostToDb } = require('../../../utils/coerce');
 const { insertMovie } = require('../../../db/sql/communitylibrary/movies');
 const { communitylibrary } = require('../../../db/db');
 const { buildMovie, perFilmStatusSent } = require('./_fields');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -25,7 +26,7 @@ router.post('/:user_id', async (req, res) => {
     await communitylibrary.promise().query(insertMovie, params);
     return res.json({ message: 'Movie added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

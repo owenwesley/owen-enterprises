@@ -1,5 +1,6 @@
 const express = require('express');
 const { bgtracker } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 // Delete a specific row by its own id (safe, targeted delete)
@@ -11,7 +12,7 @@ router.post('/:user_id', async (req, res) => {
     );
     return res.json({ message: 'Blood pressure deleted' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 module.exports = router;

@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.28** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.11.29** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -56,7 +56,7 @@ NODE_ENV=production npm start        # http://localhost:4000
 
 Other scripts (project root): `npm start` (plain `node server.js`), `npm run server` (nodemon), `npm run client` (Vite dev server only). In `client/`: `npm run dev` / `npm start` (dev server), `npm run build` (writes `client/build`), `npm run preview` (serve the built app locally).
 
-There is no full automated test suite, but `npm run check` (`tests/prerelease-check.js`) runs a short pre-release check against the running server: sign-up/sign-in, the 90-row weight cap, per-user access, and every Delete-my-account rule. It uses throwaway `testchk_...` users and removes them. It does not run the weekly rebuild.
+**`npm run check` runs everything:** it starts its own copies of the server (ports 4110 / 4111, rate limits off, HIPAA gate off or on as each suite needs) and runs all 12 suites in one go (check, church 1-7, hipaa, mfa, twilio, hardening), printing one line per suite and exiting non-zero if any fail. `node tests/run-all.js church7 mfa` runs only the named ones. `npm run check:basic` is the old short check against a server you already have running. `npm run check:ui` is an optional phone-size browser check (needs Playwright, see the header of `tests/ui-borrow.js`). The tests use throwaway `test*_...` users and churches and remove them.
 
 ---
 
@@ -86,7 +86,13 @@ JWT_SECRET=a-long-random-string
 | `DB_CHURCH` | `church` | Church module: `churches` and `members`. A **fifth** database; created automatically |
 | `MAINTENANCE_REBUILD_ENABLED` | *unset (off)* | Set `true` to run the weekly table rebuild **and id renumbering** (1..N, no gaps) — see the 1.10.4 entry in *Version history* |
 | `MAINTENANCE_TZ` | `America/Los_Angeles` | Time zone the Sunday 12-4 AM window is measured in |
-| `JWT_SECRET` | *insecure built-in fallback* | **Always set your own.** Tokens last 8 hours |
+| `JWT_SECRET` | *insecure built-in fallback* | **Always set your own** (`npm run secret` prints one; changing it signs everyone out once). Tokens last 8 hours |
+| `CORS_ORIGIN` | *empty = any website may call the API* | **Set in production**: the exact address(es) people use, comma-separated |
+| `STRICT_SECURITY` | off | `on` (with `NODE_ENV=production`): refuse to start if `JWT_SECRET` is missing or under 32 characters or `CORS_ORIGIN` is empty |
+| `TRUST_PROXY` | unset | Number of reverse-proxy hops (usually `1`). Needed behind a proxy or the rate limits see one shared IP |
+| `RATE_LIMIT_SIGNIN_MAX` / `_SIGNUP_` / `_MFA_` / `_BORROW_` / `_API_MAX` | 10 / 10 / 15 / 30 / 1200 | Rate-limit sizes (see `middleware/rateLimits.js`); `RATE_LIMIT=off` turns them all off (tests only) |
+| `HELMET_CSP` | on | `off` drops the Content-Security-Policy header if a deployment needs something it blocks |
+| `BORROW_EXPIRE_DAYS` | `21` | An unanswered borrow request closes itself after this many days |
 | `NODE_ENV` | — | `production` makes the server serve `client/build` |
 
 ---
@@ -118,7 +124,9 @@ owenenterprises/                 ← project root = the Node/Express server
 │   ├── meetings/                meetings, chairs, memos
 │   └── owenenterprises/         featurePreferences
 ├── tests/
-│   └── prerelease-check.js      pre-release check against the running server (npm run check)
+│   ├── run-all.js               runs every suite below in one go (npm run check)
+│   ├── prerelease-check.js      short check against a running server (npm run check:basic)
+│   └── church-*.js, hardening.js, hipaa-gate.js, mfa.js, twilio-request.js, ui-borrow.js   the other suites
 ├── db/
 │   ├── db.js                    the four connection pools
 │   ├── init.js                  creates databases + tables at start-up
@@ -381,7 +389,8 @@ In the Twilio console allow only the **United States and Canada** (Verify servic
 
 Please read these before putting real users' data on it.
 
-- **CORS is open** to every origin, and `JWT_SECRET` falls back to a public default if unset.
+- **CORS is open and `JWT_SECRET` falls back to a public default until you set them in `.env`** (both only log a warning; `STRICT_SECURITY=on` makes production refuse to start instead). The code is ready; the real values are yours to set.
+- **Rate limits are in memory** (a restart clears them, each process counts alone). Behind a proxy set `TRUST_PROXY`; with several processes give `express-rate-limit` a shared store.
 - **Silent failures in the UI.** The front end does not show HTTP errors; a failed save just reverts when the list reloads.
 - **Meetings "reset"** is done client-side (delete every row, then re-add), so a failure part-way loses data.
 - **Legacy files:** `db/setup.sql` is now just a deprecation stub (its old contents were stale); `db/init.js` is the schema source of truth. `db/sql/users.js` is a re-export shim for `db/sql/owenenterprises/users.js` (kept for backward-compatible import paths) — the real SQL lives in the latter (the unused `insertUser`, `updateUser` and `deleteUserById` were removed in 1.10.3). Table definitions exist in both `db/init.js` and `db/db.js`, and must be kept identical — a mismatch would mean a fresh install and a `db/db.js`-only path disagree.
@@ -389,6 +398,18 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.11.29** — Hardening, a badge for borrow requests, request expiry, "Returned", and one command that runs every test.
+- **No more database errors in the browser:** every 500 now answers `Something went wrong on the server. Please try again.`; the real error (with the request path) is logged on the server only (`utils/serverError.js`, 160 call sites, replacing every `err.message` / `e.message` reply). An error thrown on purpose with `e.expose = true` still shows its message.
+- **Rate limits and headers:** `express-rate-limit` on sign-in (10 failures / 15 min per IP, successes not counted), sign-up (10 / hour), MFA send and verify (15 / 15 min), borrow requests (30 / hour per signed-in user) and a loose 1200 / 5 min backstop for the whole API; answers 429 with a "try again in about N minute(s)" message. `helmet` adds the standard security headers and a Content-Security-Policy (own scripts only; HSTS only with `FORCE_HTTPS`). Bad JSON now gets a clean 400. Settings: see Configuration.
+- **Secrets:** `npm run secret` prints a fresh `JWT_SECRET`; `.env.example` added; start-up warns about a missing or short secret; `STRICT_SECURITY=on` refuses to start in production without a good secret and `CORS_ORIGIN`. **Not changed for you:** your real `.env` values (JWT_SECRET, CORS_ORIGIN, TRUST_PROXY).
+- **Borrow badge:** a red number on the Community Library card (landing page), on Books / Movies in the menu (phone and desktop) and on the menu button, for requests waiting for MY answer. `GET /church/borrow-count/:user_id` returns `{ pending, books, movies }` (own id only, no ids of other people); refreshed on sign-in, every 60 seconds, on tab focus and right after answering.
+- **Expiry:** a request nobody answers for 21 days (`BORROW_EXPIRE_DAYS`) closes as `expired`; it is a system close (`auto=1`), so it never counts as a No and asking again is allowed. Expired requests do not count in the badge.
+- **Returned:** `POST /communitylibrary/returned/:user_id` puts your own book / movie set back In and clears the borrower; only if it is Out and not Lost. The Out card shows a "Returned" strip.
+- **Tests:** `npm run check` now runs all 12 suites (`tests/run-all.js`); new `check:church7` (25: badge counts, expiry, Returned), `check:hardening` (24: no `err.message` anywhere in routes, headers, each rate limit, STRICT_SECURITY), optional `check:ui` (13, browser).
+- **Verified (sandbox, Node 22):** all 12 suites, 524 checks, pass on **MariaDB 10.11** and on **MySQL 8.0.46** (first time on MySQL 8). Browser (headless Chromium, 390x844, production build served by the real server): two people ask for the same book; the owner sees the badge on the landing card and the Books menu entry; Yes turns the book Out and closes the other request; Returned puts it back In; no sideways scrolling; no console errors; client build OK. Found and fixed in the browser run: the badge on the phone menu had no screen-reader label.
+- **Not verified:** a real phone (touch feel, keyboard, Safari), Windows, more than one server process behind a proxy, TLS / HSTS on a real host.
+- **Still open:** prayers, finances, missions and treasurer / mission-leader permissions (lawyer review of church data first); the front end still shows no HTTP errors for failed saves.
 
 **1.11.28** — "Ask to borrow": a Yes now really lends the item, and the loose ends around it are closed.
 - **Yes marks it Out:** when the owner answers Yes, the book (or the whole movie set: disc and every film) is marked **Out to the asker's name** in one guarded statement (`... WHERE io=1 AND lost=0`), so it cannot overwrite a borrower the owner typed in the meantime. If the item is no longer In (lent by hand, lost, deleted) the answer is 409 and the request is closed. The owner's own Books / Movies list refreshes after a Yes (`onOwnChanged`).

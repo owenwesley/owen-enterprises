@@ -52,6 +52,13 @@ export function useBooks() {
     await getBooks();
   }, [books, user.id, getBooks]);
 
-  return { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook };
+  /** One tap: mark an Out book back In (server: only this user's row, only if Out and not Lost). Returns an error string or null. */
+  const markReturned = useCallback(async (id) => {
+    const res = await postFetch(`/communitylibrary/returned/${user.id}`, { kind: 'book', id });
+    await getBooks();
+    return res?.error || null;
+  }, [user.id, getBooks]);
+
+  return { books, getBooks, addBook, saveBook, uploadBookCover, deleteBook, markReturned };
 }
 

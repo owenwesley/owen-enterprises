@@ -5,7 +5,9 @@
 require('dotenv').config();
 
 const express      = require('express');
+const helmet       = require('helmet');
 const cors         = require('cors');
+const limits       = require('./middleware/rateLimits');
 const path         = require('path');
 const multer       = require('multer');
 const auth         = require('./middleware/auth');
@@ -22,8 +24,39 @@ const backfillInviteCodes = require('./db/backfillInviteCodes');
 const port = process.env.PORT || 4000;
 const app  = express();
 // Behind an HTTPS-terminating proxy (FORCE_HTTPS=on) trust X-Forwarded-Proto so req.secure is right.
+// TRUST_PROXY=<hops> does the same without forcing HTTPS (needed so per-IP rate limits see the
+// real visitor address behind a proxy - see middleware/rateLimits.js).
 if (require('./middleware/forceHttps').isOn()) app.set('trust proxy', 1);
+if (process.env.TRUST_PROXY) {
+  const hops = parseInt(process.env.TRUST_PROXY, 10);
+  app.set('trust proxy', Number.isFinite(hops) ? hops : process.env.TRUST_PROXY);
+}
 app.use(require('./middleware/forceHttps'));
+
+// Security headers (helmet). The CSP allows only this site's own scripts, plus images from
+// anywhere over https (book covers use an external placeholder) and inline styles (the UI
+// library injects them). HSTS is sent only when FORCE_HTTPS is on. HELMET_CSP=off drops the
+// CSP header if a deployment ever needs something it blocks.
+app.use(helmet({
+  contentSecurityPolicy: String(process.env.HELMET_CSP || '').toLowerCase() === 'off' ? false : {
+    useDefaults: false,
+    directives: {
+      'default-src': ["'self'"],
+      'script-src': ["'self'"],
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+      'font-src': ["'self'", 'data:'],
+      'connect-src': ["'self'"],
+      'object-src': ["'none'"],
+      'base-uri': ["'self'"],
+      'form-action': ["'self'"],
+      'frame-ancestors': ["'none'"],
+    },
+  },
+  hsts: require('./middleware/forceHttps').isOn(),
+  crossOriginResourcePolicy: { policy: 'cross-origin' },   // the app may be served from another origin (CORS_ORIGIN)
+  crossOriginEmbedderPolicy: false,
+}));
 
 // CORS: open to every origin by default (unchanged behaviour, so nothing that works
 // today stops working). To lock it down set CORS_ORIGIN in .env to a comma-separated
@@ -40,9 +73,22 @@ if (!corsOrigins.length) {
 }
 if (!process.env.JWT_SECRET) {
   console.warn('WARNING: JWT_SECRET is not set, so tokens are signed with a public default secret. ' +
-    'Set a long random JWT_SECRET in .env (existing sessions will need to sign in again).');
+    'Set a long random JWT_SECRET in .env (run: npm run secret). Existing sessions will need to sign in again.');
+} else if (process.env.JWT_SECRET.length < 32) {
+  console.warn('WARNING: JWT_SECRET is shorter than 32 characters. Generate a stronger one with: npm run secret');
+}
+// STRICT_SECURITY=on: in production, refuse to start rather than run with the weak defaults.
+if (String(process.env.STRICT_SECURITY || '').toLowerCase() === 'on' && process.env.NODE_ENV === 'production') {
+  const problems = [];
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) problems.push('JWT_SECRET missing or shorter than 32 characters');
+  if (!corsOrigins.length) problems.push('CORS_ORIGIN is empty');
+  if (problems.length) {
+    console.error('Refusing to start (STRICT_SECURITY=on): ' + problems.join('; '));
+    process.exit(1);
+  }
 }
 app.use(express.json());
+app.use(limits.api);
 
 // ── Browser refresh on pages that share a name with an API prefix ────────────
 // /meetings, /doctor and /admin are both API prefixes and React Router pages.
@@ -60,6 +106,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+app.use('/auth/signin', limits.signin);
+app.use('/auth/signup', limits.signup);
+app.use('/auth/mfa/send', limits.mfa);
+app.use('/auth/mfa/verify', limits.mfa);
 app.use('/auth/mfa', require('./routes/mfa'));
 app.use('/auth', require('./routes/auth'));
 
@@ -85,6 +135,7 @@ app.use('/communitylibrary',         auth,
 app.use('/meetings',                 auth, ownerOnly(), require('./routes/meetings'));
 // Church module: every path ends with the user's id (ownerOnly); routes inside a
 // church also check the member's role through middleware/church.js.
+app.use('/church/borrow/request',    auth, limits.borrow);   // per-user cap on borrow requests
 app.use('/church',                   auth, ownerOnly(), require('./routes/church'));
 // Doctor routes do their own role / approval checks (middleware/doctor.js).
 app.use('/doctor',                   auth, require('./routes/doctor'));
@@ -110,10 +161,20 @@ if (process.env.NODE_ENV === 'production') {
 // ── Error handler: Multer errors (file too large, bad type, etc.) ─────────────
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: `Upload error: ${err.message}` });
+    return res.status(400).json({ error: `Upload error: ${err.message}` });   // safe: a deliberate Multer message (file too large, ...)
+  }
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'The request body is not valid JSON.' });
+  }
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'The request is too large.' });
+  }
+  if (err && err.status && err.status < 500) {          // other client errors (bad file type from the upload filter, etc.)
+    return res.status(err.status).json({ error: err.expose === false ? 'Bad request.' : err.message });   // safe: a deliberate < 500 client error
   }
   if (err) {
-    return res.status(400).json({ error: err.message });
+    console.error('Unhandled error:', err && err.stack ? err.stack : err);
+    return res.status(500).json({ error: 'Something went wrong on the server. Please try again.' });
   }
   next();
 });

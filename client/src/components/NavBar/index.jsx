@@ -14,10 +14,12 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import MenuIcon from '@mui/icons-material/Menu';
+import Badge from '@mui/material/Badge';
 
 import { useAppContext } from '../../context/AppContext';
 import { registerTokenGetter } from '../../utils/api';
 import { useFeaturePreferences } from '../../hooks/useFeaturePreferences';
+import { useBorrowBadge } from '../../hooks/useBorrowBadge';
 import { usePreferences } from '../../features/bgtracker/hooks/usePreferences';
 import { useChartData } from '../../features/bgtracker/hooks/useChartData';
 import { useReadings } from '../../features/bgtracker/hooks/useReadings';
@@ -221,7 +223,12 @@ function TopBar({ navItems }) {
                   }}
                 >
                   {navItems.map((n) => (
-                    <Box key={n.to} component={Link} to={n.to} sx={sx.link}>{n.label}</Box>
+                    <Box key={n.to} component={Link} to={n.to} sx={sx.link}>
+                      {n.badge > 0
+                        ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { right: -10 } }}
+                            aria-label={`${n.badge} borrow request(s) waiting`}>{n.label}</Badge>
+                        : n.label}
+                    </Box>
                   ))}
                 </Box>
 
@@ -237,7 +244,9 @@ function TopBar({ navItems }) {
       <Toolbar variant="dense" sx={{ gap: 0.5, minHeight: 52, px: 1 }}>
         {activeFeature && navItems.length > 0 && (
           <IconButton edge="start" sx={sx.iconBtn} aria-label="Open menu" onClick={() => setOpen(true)}>
-            <MenuIcon />
+            <Badge badgeContent={navItems.reduce((t, n) => t + (n.badge || 0), 0)} color="error" max={99}>
+              <MenuIcon />
+            </Badge>
           </IconButton>
         )}
         {activeFeature && (
@@ -261,7 +270,10 @@ function TopBar({ navItems }) {
               <ListItemButton key={n.to} component={Link} to={n.to} onClick={close}
                 selected={n.to === '/' ? pathname === '/' : pathname.startsWith(n.to)}
                 sx={{ minHeight: 48 }}>
-                <ListItemText primary={n.label} />
+                <ListItemText primary={n.badge > 0
+                  ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { right: -14 } }}
+                      aria-label={`${n.badge} borrow request(s) waiting`}>{n.label}</Badge>
+                  : n.label} />
               </ListItemButton>
             ))}
           </List>
@@ -335,10 +347,11 @@ export default function NavBar() {
   }, [state.readings, state.bloodpressures, state.weights, preference.timesPD, user.isLogedIn, rebuildAllCharts]);
 
   const bgNav = buildBgNav(preference);
+  const borrowBadge = useBorrowBadge();   // requests waiting for my answer
 
   const navMap = {
     bgtracker: bgNav,
-    communityLibrary: [{ to: '/books', label: '📚 Books' }, { to: '/movies', label: '🎬 Movies' }, { to: '/contacts', label: '👤 Contacts' }],
+    communityLibrary: [{ to: '/books', label: '📚 Books', badge: borrowBadge.books }, { to: '/movies', label: '🎬 Movies', badge: borrowBadge.movies }, { to: '/contacts', label: '👤 Contacts' }],
     meetings: [
       { to: '/meetings', label: '🤝 Meetings' },
       { to: '/chairs', label: '👤 Chairs' },

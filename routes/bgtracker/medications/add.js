@@ -2,6 +2,7 @@ const express = require('express');
 const { toNum, toStr } = require('../../../utils/coerce');
 const { insertMedication } = require('../../../db/sql/bgtracker/medications');
 const { bgtracker } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -16,7 +17,7 @@ router.post('/:user_id', async (req, res) => {
     );
     return res.json({ message: 'Medication added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 module.exports = router;

@@ -3,6 +3,7 @@ const { toBit, toNum } = require('../../../utils/coerce');
 const normalizeDate = require('../../../middleware/normalizeDate');
 const { insertReadings } = require('../../../db/sql/bgtracker/readings');
 const { bgtracker }      = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router   = express.Router();
 
 router.post('/:user_id', normalizeDate, async (req, res) => {
@@ -20,7 +21,7 @@ router.post('/:user_id', normalizeDate, async (req, res) => {
     );
     return res.json({ message: 'Reading added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

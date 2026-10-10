@@ -69,8 +69,10 @@ const {
   BORROW_COOLDOWN_DAYS, insertBorrow, selectPendingDuplicate, selectRecentDecline, countPendingByRequester,
   selectIncoming, selectOutgoing, selectOwnPending, answerBorrow, declineOthersForItem, cancelBorrow, clearBorrow,
   purgeBorrow,
+  expireStale, countIncomingPending,
 } = require('../db/sql/church/borrow');
 const { selectAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement } = require('../db/sql/church/announcements');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 const NAME_MAX = 150;
@@ -121,7 +123,7 @@ router.get('/mine/:user_id', async (req, res) => {
     }
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -154,7 +156,7 @@ router.post('/create/:user_id', async (req, res) => {
         if (e.code !== 'ER_DUP_ENTRY') throw e;   // join code collision: try another
       }
     }
-    if (!churchId) throw new Error('Could not create a join code, please try again');
+    if (!churchId) { const e = new Error('Could not create a join code, please try again'); e.expose = true; throw e; }
     // The person who requests a church becomes its owner (active at once; the
     // church itself is unusable until an admin approves it).
     await conn.query(insertMember, [churchId, req.user.id, 'owner', 'active']);
@@ -162,7 +164,7 @@ router.post('/create/:user_id', async (req, res) => {
     return res.status(201).json({ message: 'Church requested. It is waiting for approval.', churchId });
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch { /* connection gone */ } }
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   } finally {
     if (conn) conn.release();
   }
@@ -197,7 +199,7 @@ router.post('/join/:user_id', async (req, res) => {
     }
     return res.json({ message: `Request sent to ${church.name}. The church owner needs to approve it.`, churchName: church.name });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -225,7 +227,7 @@ router.get('/:church_id/members/:user_id', requireChurch('members.view'), async 
     }));
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -236,7 +238,7 @@ router.post('/:church_id/members/approve/:user_id', requireChurch('members.manag
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Member approved' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -249,7 +251,7 @@ router.post('/:church_id/members/remove/:user_id', requireChurch('members.manage
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Member removed' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -262,7 +264,7 @@ router.post('/:church_id/edit/:user_id', requireChurch('church.edit'), async (re
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Mission statement saved' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -281,7 +283,7 @@ router.post('/:church_id/leave/:user_id', async (req, res) => {
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'You left the church' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -303,7 +305,7 @@ router.post('/:church_id/joincode/reset/:user_id', requireChurch('joincode.reset
     }
     return res.status(500).json({ error: 'Could not create a join code, please try again' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -349,7 +351,7 @@ router.post('/:church_id/transfer/:user_id', requireChurch('church.transfer'), a
     return res.json({ message: 'The church now belongs to the new owner. You are a regular member.' });
   } catch (err) {
     if (conn) { try { await conn.rollback(); } catch { /* connection gone */ } }
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   } finally {
     if (conn) conn.release();
   }
@@ -367,7 +369,7 @@ router.post('/:church_id/members/role/:user_id', requireChurch('members.roles'),
     await db.promise().query(setRole, [role, memberId, req.church.id]);
     return res.json({ message: 'Role saved', role });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -389,7 +391,7 @@ router.post('/:church_id/areas/:user_id', requireChurch('areas.manage'), async (
     }
     return res.json({ message: 'Saved' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -404,7 +406,7 @@ router.post('/:church_id/library/share/:user_id', requireChurch('library.share')
       shareLibrary: !!share,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -452,7 +454,7 @@ router.get('/:church_id/library/:user_id', requireChurch('library.view'), async 
     }));
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -474,7 +476,7 @@ router.post('/:church_id/contact/share/:user_id', requireChurch('contact.share')
       shareContact: !!share, contactPhone: phone, contactAddress: address,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -511,7 +513,7 @@ router.get('/shared-library/:user_id', async (req, res) => {
       }),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -551,13 +553,14 @@ router.post('/borrow/request/:user_id', async (req, res) => {
     await db.promise().query(insertBorrow, [item.user_id, req.user.id, kind, item.id, item.title, note]);
     return res.status(201).json({ message: 'Request sent.' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
 // GET /church/borrow/:user_id  ->  { incoming: [...], outgoing: [...] }
 router.get('/borrow/:user_id', async (req, res) => {
   try {
+    await db.promise().query(expireStale, [req.user.id, req.user.id]);
     const [inc] = await db.promise().query(selectIncoming, [req.user.id]);
     const [out] = await db.promise().query(selectOutgoing, [req.user.id]);
     const names = await personName([...new Set([...inc.map((r) => r.requester_id), ...out.map((r) => r.user_id)])]);
@@ -566,7 +569,19 @@ router.get('/borrow/:user_id', async (req, res) => {
       outgoing: out.map((r) => ({ id: r.id, to: names.get(r.user_id) || 'Someone', kind: r.kind, title: r.title, status: r.status, auto: !!r.auto, createdAt: r.createdAt })),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
+  }
+});
+
+// GET /church/borrow-count/:user_id  ->  { pending, books, movies }   requests waiting for MY answer (nav badge)
+router.get('/borrow-count/:user_id', async (req, res) => {
+  try {
+    await db.promise().query(expireStale, [req.user.id, req.user.id]);
+    const [rows] = await db.promise().query(countIncomingPending, [req.user.id]);
+    const n = (k) => Number((rows.find((r) => r.kind === k) || {}).n) || 0;
+    return res.json({ pending: n('book') + n('movie'), books: n('book'), movies: n('movie') });
+  } catch (err) {
+    return serverError(res, err);
   }
 });
 
@@ -614,7 +629,7 @@ router.post('/borrow/answer/:user_id', async (req, res) => {
     await db.promise().query(declineOthersForItem, [req.user.id, row.kind, row.item_id, id]);
     return res.json({ message: `Accepted. "${row.title}" is now marked Out to ${who}.`, markedOut: true });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -627,7 +642,7 @@ router.post('/borrow/cancel/:user_id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ error: 'Request not found.' });
     return res.json({ message: 'Cancelled.' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -639,7 +654,7 @@ router.post('/borrow/clear/:user_id', async (req, res) => {
     await db.promise().query(clearBorrow, [req.user.id, req.user.id, id, req.user.id, req.user.id]);
     return res.json({ message: 'Cleared.' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -674,7 +689,7 @@ router.get('/contacts/:user_id', async (req, res) => {
       .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -702,7 +717,7 @@ router.get('/:church_id/announcements/:user_id', requireChurch('announcements.vi
     }));
     return res.json({ results });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -723,7 +738,7 @@ router.post('/:church_id/announcements/post/:user_id', requireChurch('announceme
     const [r] = await db.promise().query(insertAnnouncement, [req.church.id, req.user.id, a.title, a.body]);
     return res.status(201).json({ message: 'Announcement posted', announcementId: r.insertId });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -736,7 +751,7 @@ router.post('/:church_id/announcements/edit/:user_id', requireChurch('announceme
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Announcement saved' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -747,7 +762,7 @@ router.post('/:church_id/announcements/delete/:user_id', requireChurch('announce
     if (!r.affectedRows) return notFound(res);
     return res.json({ message: 'Announcement deleted' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

@@ -3,6 +3,7 @@ const { ioToDb, lostToDb } = require('../../../utils/coerce');
 const { insertBook } = require('../../../db/sql/communitylibrary/books');
 const { communitylibrary } = require('../../../db/db');
 const { checkWho, whoToDb } = require('../../../utils/borrower');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', async (req, res) => {
@@ -22,7 +23,7 @@ router.post('/:user_id', async (req, res) => {
     );
     return res.json({ message: 'Book added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

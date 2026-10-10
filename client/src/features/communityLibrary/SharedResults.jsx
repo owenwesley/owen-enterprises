@@ -40,7 +40,10 @@ export function useBorrow(onChange) {
   const load = useCallback(() => {
     if (!userId) return Promise.resolve();
     return getFetch(`/church/borrow/${userId}`)
-      .then((d) => setData({ incoming: d?.incoming || [], outgoing: d?.outgoing || [] }))
+      .then((d) => {
+        setData({ incoming: d?.incoming || [], outgoing: d?.outgoing || [] });
+        try { window.dispatchEvent(new Event('oe:borrow-changed')); } catch { /* non-browser */ }   // refresh the nav badge
+      })
       .catch(() => { /* no church: nothing to show */ });
   }, [userId]);
   useEffect(() => { load(); }, [load]);
@@ -60,7 +63,7 @@ export function useBorrow(onChange) {
   };
 }
 
-const statusColor = { pending: 'default', accepted: 'primary', declined: 'secondary' };
+const statusColor = { pending: 'default', accepted: 'primary', declined: 'secondary', expired: 'default' };
 
 /** Requests other members sent you (answer them) and requests you sent (cancel or clear them). */
 export function BorrowRequests({ borrow }) {
@@ -100,7 +103,7 @@ export function BorrowRequests({ borrow }) {
             <div key={`o${r.id}`} style={line}>
               <Typography sx={{ flex: '1 1 200px', minWidth: 0, fontSize: '0.9rem' }}>{`"${r.title}" from ${r.to}`}</Typography>
               <Chip size="small" color={statusColor[r.status]}
-                label={r.status === 'pending' ? 'Waiting' : r.status === 'accepted' ? 'Yes' : (r.auto ? 'Taken' : 'No')} />
+                label={r.status === 'pending' ? 'Waiting' : r.status === 'accepted' ? 'Yes' : r.status === 'expired' ? 'No answer - expired' : (r.auto ? 'Taken' : 'No')} />
               {r.status === 'pending'
                 ? <Button size="small" onClick={() => borrow.cancel(r.id)}>Cancel</Button>
                 : <Button size="small" onClick={() => borrow.clear(r.id)}>Clear</Button>}

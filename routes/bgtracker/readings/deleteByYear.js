@@ -1,6 +1,7 @@
 const express  = require('express');
 const { deleteReadingsByYear } = require('../../../db/sql/bgtracker/readings');
 const { bgtracker }            = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router   = express.Router();
 
 // POST /bgtracker/readings/deleteByYear/:user_id
@@ -20,7 +21,7 @@ router.post('/:user_id', async (req, res) => {
     const [result] = await bgtracker.promise().query(deleteReadingsByYear, [req.params.user_id, pattern]);
     return res.json({ message: 'Readings for year deleted', affectedRows: result?.affectedRows });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

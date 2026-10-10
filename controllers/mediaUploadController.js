@@ -18,6 +18,7 @@ const path = require('path');
 const sharp = require('sharp');
 const { sanitizeFilename } = require('../utils/sanitize');
 const { classifyCollection } = require('../utils/collectionFormat');
+const { serverError } = require('../utils/serverError');
 
 const IMAGES_ROOT      = path.join(__dirname, '..', 'images');
 const PLACEHOLDERS_DIR = path.join(IMAGES_ROOT, 'placeholders');
@@ -91,7 +92,7 @@ async function uploadBookImage(req, res) {
 
     return res.json({ message: 'Book image saved', img_url: webPath });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 }
 
@@ -125,7 +126,7 @@ async function uploadMovieImage(req, res) {
 
     return res.json({ message: 'Movie image saved', img_url: webPath });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 }
 
@@ -191,7 +192,7 @@ async function uploadCollectionImage(req, res) {
       movieCount: format.count,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 }
 

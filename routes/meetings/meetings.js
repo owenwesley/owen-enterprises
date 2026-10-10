@@ -8,6 +8,7 @@ const {
 } = require('../../db/sql/meetings/meetings');
 const { mergeExisting } = require('../../utils/mergeExisting');
 const { meetings: db } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 // GET /meetings/:user_id
@@ -19,7 +20,7 @@ router.get('/:user_id', async (req, res) => {
     );
     return res.json({ results: formatDateRows(results) });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -40,7 +41,7 @@ router.post('/add/:user_id', normalizeDate, async (req, res) => {
     );
     return res.json({ message: 'Meeting added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 
@@ -73,7 +74,7 @@ router.post('/delete/:user_id', async (req, res) => {
     await db.promise().query(deleteMeetingById, [req.body.id, req.params.user_id]);
     return res.json({ message: 'Meeting deleted' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

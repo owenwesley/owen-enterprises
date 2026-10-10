@@ -3,6 +3,7 @@ const { toNum } = require('../../../utils/coerce');
 const normalizeDate = require('../../../middleware/normalizeDate');
 const { insertBloodpressure } = require('../../../db/sql/bgtracker/bloodpressures');
 const { bgtracker } = require('../../../db/db');
+const { serverError } = require('../../../utils/serverError');
 const router = express.Router();
 
 router.post('/:user_id', normalizeDate, async (req, res) => {
@@ -15,7 +16,7 @@ router.post('/:user_id', normalizeDate, async (req, res) => {
     );
     return res.json({ message: 'Blood pressure added' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 module.exports = router;

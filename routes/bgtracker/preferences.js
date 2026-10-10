@@ -1,6 +1,7 @@
 const express = require('express');
 const { selectPreferences } = require('../../db/sql/bgtracker/preferences');
 const { bgtracker } = require('../../db/db');
+const { serverError } = require('../../utils/serverError');
 const router = express.Router();
 
 router.use('/add',    require('./preferences/add'));
@@ -17,7 +18,7 @@ router.get('/:user_id', async (req, res) => {
     // Return single object so frontend can do data.results.id directly
     return res.json({ results: results[0] || null });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, err);
   }
 });
 

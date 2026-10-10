@@ -9,6 +9,7 @@ const {
 const authMiddleware = require('../middleware/auth');
 const { genCode: genInviteCode } = require('../db/backfillInviteCodes');
 const deleteUser = require('../db/maintenance/deleteUser');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 const SECRET = process.env.JWT_SECRET || 'owenenterprises_secret_change_in_prod';
@@ -113,7 +114,7 @@ router.post('/signup', async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Username already taken' });
     }
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   } finally {
     if (conn) conn.release();
   }
@@ -155,7 +156,7 @@ router.post('/signin', async (req, res) => {
     // Return { results: [user], token } — consistent shape the frontend expects
     return res.json({ results: [safeUser], token });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -190,7 +191,7 @@ router.get('/', authMiddleware, async (req, res) => {
       token: (req.headers.authorization || '').replace('Bearer ', ''),
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -277,7 +278,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Username already taken', fieldErrors: { userName: 'Username already taken' } });
     }
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 

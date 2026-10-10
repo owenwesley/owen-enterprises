@@ -152,5 +152,12 @@ export function useMovies() {
     await getMovies();
   }, [movies, user.id, getMovies]);
 
-  return { movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie };
+  /** One tap: mark an Out movie (every film of a set) back In. Returns an error string or null. */
+  const markReturned = useCallback(async (id) => {
+    const res = await postFetch(`/communitylibrary/returned/${user.id}`, { kind: 'movie', id });
+    await getMovies();
+    return res?.error || null;
+  }, [user.id, getMovies]);
+
+  return { movies, getMovies, addMovie, saveMovie, uploadMoviePoster, deleteMovie, markReturned };
 }

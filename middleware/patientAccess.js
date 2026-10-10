@@ -1,4 +1,5 @@
 const { owenenterprises: db } = require('../db/db');
+const { serverError } = require('../utils/serverError');
 
 /**
  * Per-patient, per-data-type access check for a doctor. Runs AFTER
@@ -35,7 +36,7 @@ function requirePatientAccess(column) {
       }
       return next();
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   };
 }

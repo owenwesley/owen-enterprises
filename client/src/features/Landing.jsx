@@ -4,7 +4,9 @@ import CardContent from '@mui/material/CardContent';
 import CardActionArea from '@mui/material/CardActionArea';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import Badge from '@mui/material/Badge';
 import { useAppContext } from '../context/AppContext';
+import { useBorrowBadge } from '../hooks/useBorrowBadge';
 
 const sxStyles = {
   // Fills exactly the space the app shell gives it (viewport minus the app bar)
@@ -113,6 +115,7 @@ const ALL_FEATURES = [
 
 export default function Landing() {
   const { state, dispatch } = useAppContext();
+  const borrowBadge = useBorrowBadge();
 
   // Only show features the user is enabled for
   const { featurePreferences } = state;
@@ -132,7 +135,12 @@ export default function Landing() {
             <Card key={f.key} sx={sxStyles.card} style={{ background: f.bg }} elevation={4}>
               <CardActionArea onClick={() => dispatch({ type: 'SET_FEATURE', payload: f.key })}>
                 <CardContent sx={sxStyles.cardInner}>
-                  <span style={sxStyles.icon}>{f.icon}</span>
+                  {f.key === 'communityLibrary' && borrowBadge.total > 0 ? (
+                    <Badge badgeContent={borrowBadge.total} color="error" max={99}
+                      aria-label={`${borrowBadge.total} borrow request(s) waiting`}>
+                      <span style={sxStyles.icon}>{f.icon}</span>
+                    </Badge>
+                  ) : <span style={sxStyles.icon}>{f.icon}</span>}
                   <Typography sx={sxStyles.cardTitle}>{f.title}</Typography>
                   <Typography sx={sxStyles.cardDesc}>{f.desc}</Typography>
                 </CardContent>

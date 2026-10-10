@@ -11,6 +11,7 @@ const {
   selectClinics, selectClinicById,
   selectMyClinicRequest, setClinicRequest, clearClinicRequest,
 } = require('../db/sql/owenenterprises/clinics');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/me', requireDoctor, async (req, res) => {
     if (!rows || rows.length === 0) return res.status(404).json({ error: 'Not found' });
     return res.json({ results: rows[0] });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -54,7 +55,7 @@ router.get('/patients', requireApprovedDoctor, async (req, res) => {
     );
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -71,7 +72,7 @@ router.get('/patients/:patientId/weights',
       );
       return res.json({ results });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   });
 
@@ -84,7 +85,7 @@ router.get('/patients/:patientId/bloodpressures',
       );
       return res.json({ results });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   });
 
@@ -97,7 +98,7 @@ router.get('/patients/:patientId/readings',
       );
       return res.json({ results });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   });
 
@@ -110,7 +111,7 @@ router.get('/patients/:patientId/medications',
       );
       return res.json({ results });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return serverError(res, e);
     }
   });
 
@@ -133,7 +134,7 @@ router.get('/clinics', requireDoctor, async (req, res) => {
       : await db.promise().query(selectClinics);
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -143,7 +144,7 @@ router.get('/clinic-request', requireDoctor, async (req, res) => {
     const [rows] = await db.promise().query(selectMyClinicRequest, [req.doctor.id]);
     return res.json({ results: rows[0] || null });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -161,7 +162,7 @@ router.post('/clinic-request', requireDoctor, async (req, res) => {
     await db.promise().query(setClinicRequest, [clinicId, req.doctor.id]);
     return res.json({ message: 'Clinic change requested' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -171,7 +172,7 @@ router.delete('/clinic-request', requireDoctor, async (req, res) => {
     await db.promise().query(clearClinicRequest, [req.doctor.id]);
     return res.json({ message: 'Clinic request withdrawn' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 

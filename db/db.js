@@ -610,7 +610,7 @@ const TABLES = {
         item_id      INT NOT NULL,
         title        VARCHAR(255) NOT NULL,
         note         VARCHAR(500) NOT NULL DEFAULT '',
-        status       ENUM('pending','accepted','declined','cancelled') NOT NULL DEFAULT 'pending',
+        status       ENUM('pending','accepted','declined','cancelled','expired') NOT NULL DEFAULT 'pending',
         createdAt    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         answeredAt   TIMESTAMP NULL DEFAULT NULL,
         auto         TINYINT(1) NOT NULL DEFAULT 0,

@@ -1,6 +1,7 @@
 const express = require('express');
 const { owenenterprises: db } = require('../db/db');
 const { toBit } = require('../utils/coerce');
+const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get('/', async (req, res) => {
     );
     return res.json({ results });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -64,7 +65,7 @@ router.post('/link', async (req, res) => {
     );
     return res.json({ message: 'Doctor linked' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -86,7 +87,7 @@ router.post('/:id/sharing', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
     return res.json({ message: 'Sharing updated' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
@@ -100,7 +101,7 @@ router.post('/:id/revoke', async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
     return res.json({ message: 'Access revoked' });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return serverError(res, e);
   }
 });
 
