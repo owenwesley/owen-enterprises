@@ -114,23 +114,36 @@ export function BorrowRequests({ borrow }) {
 const grid = { display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 };
 const cardSx = { width: 'calc(50% - 8px)', maxWidth: 160, display: 'flex', flexDirection: 'column', position: 'relative' };
 
-function Cover({ src, alt }) {
-  const [bad, setBad] = useState(!src);
-  if (bad) {
+// Picture paths come from the owner's row. Tidy them (missing leading slash, spaces) and, if one
+// fails to load, try the next candidate, then the stock "no cover" picture, then a plain title tile.
+const fixPath = (u) => {
+  const t = String(u || '').trim();
+  if (!t) return '';
+  if (/^(https?:)?\/\//i.test(t) || t.startsWith('data:')) return t;
+  return encodeURI(decodeURI(t.startsWith('/') ? t : `/${t}`));
+};
+
+function Cover({ srcs, alt, kind }) {
+  const list = [...srcs.map(fixPath).filter(Boolean), `/images/placeholders/no-${kind}-light.webp`]
+    .filter((u, i, a) => a.indexOf(u) === i);
+  const key = list.join('|');
+  const [tried, setTried] = useState(0);
+  useEffect(() => { setTried(0); }, [key]);
+  if (tried >= list.length) {
     return (
       <div style={{ height: 200, background: '#eceff1', color: '#78909c', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 8, fontSize: '0.8rem' }}>
         {alt}
       </div>
     );
   }
-  return <CardMedia component="img" sx={{ height: 200, objectFit: 'cover' }} image={src} alt={alt} onError={() => setBad(true)} />;
+  return <CardMedia key={list[tried]} component="img" sx={{ height: 200, objectFit: 'cover' }} image={list[tried]} alt={alt} onError={() => setTried((n) => n + 1)} />;
 }
 
 export function ShareCard({ kind, item, title, sub, borrow, onAsk, canAsk = true, isYou = false }) {
   const pending = borrow.outgoing.some((r) => r.status === 'pending' && r.kind === kind && r.title === title && r.to === item.sharedBy);
   return (
     <Card sx={cardSx} elevation={3}>
-      <Cover src={item.img} alt={title} />
+      <Cover srcs={[item.img, ...(item.films || []).map((f) => f.img)]} alt={title} kind={kind} />
       <span style={{ position: 'absolute', top: 8, right: 8 }}>
         <Chip size="small" label={item.available ? 'In' : 'Out'} color={item.available ? 'primary' : 'secondary'} />
       </span>

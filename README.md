@@ -390,6 +390,8 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.11.27 (cover fix)** — Shared cards: cover paths are tidied (leading slash, spaces), a movie set with no set cover uses its first film's picture, a picture that fails to load falls back to the stock no-cover image, then to the title tile. Client only (`SharedResults.jsx`).
+
 **1.11.27** — Shared Books / Movies are now a card grid with covers, an owner line and "Ask to borrow".
 - **Grid:** the "Shared by your church" list under the search is now cards like your own: cover picture, In/Out chip, title, author or films, and at the bottom "Owned by Russ Sharer" plus the church name. The button reads "Ask to borrow" (or "Requested" / "Out right now"). No cover = a plain grey card with the title.
 - **Ask to borrow:** the button opens a box for an optional message (300 characters) and sends a request to the owner. The owner sees "Russ would like to borrow ..." under their own Books / Movies search area with Yes / No; the asker sees "Waiting / Yes / No" with Cancel / Clear. Rules: only items that are In, only from members you share with, one open request per item, max 20 open requests, never your own items. Nobody's user id is sent to the browser.
