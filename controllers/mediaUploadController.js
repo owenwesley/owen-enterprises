@@ -7,7 +7,10 @@
  *
  * Storage layout:
  *   books:  images/books/<sanitized-title>.webp
- *   movies: images/movies/<media_type>/<sanitized-name>.webp
+ *   movies: client/public/images/movies/<media_type>/<sanitized-name>.webp   (media_type e.g. dvd, blu-ray)
+ *
+ * Both are served at /images/... (server.js serves client/public/images first, then images/).
+ * The saved web path stays /images/movies/<media_type>/<name>.webp.
  *
  * If no file was uploaded, a themed placeholder is copied into the same
  * target path instead, so every book/movie always has an image on disk.
@@ -22,6 +25,8 @@ const { serverError } = require('../utils/serverError');
 
 const IMAGES_ROOT      = path.join(__dirname, '..', 'images');
 const PLACEHOLDERS_DIR = path.join(IMAGES_ROOT, 'placeholders');
+// Movie posters are saved here: client/public/images/movies/<media>/ (dvd, blu-ray, ...)
+const MOVIES_ROOT      = path.join(__dirname, '..', 'client', 'public', 'images', 'movies');
 
 // Standard cover/poster dimensions — even sizing for consistent grid display
 const TARGET_WIDTH  = 400;
@@ -112,7 +117,7 @@ async function uploadMovieImage(req, res) {
 
     const nameSlug  = sanitizeFilename(name);
     const mediaSlug = sanitizeFilename(media_type); // e.g. 'dvd', 'streaming'
-    const destDir   = path.join(IMAGES_ROOT, 'movies', mediaSlug);
+    const destDir   = path.join(MOVIES_ROOT, mediaSlug);
     ensureDirSync(destDir);
 
     const destPath = path.join(destDir, `${nameSlug}.webp`);
@@ -173,7 +178,7 @@ async function uploadCollectionImage(req, res) {
     }
 
     const nameSlug = sanitizeFilename(collectionTitle);
-    const destDir  = path.join(IMAGES_ROOT, 'movies', format.slug);
+    const destDir  = path.join(MOVIES_ROOT, format.slug);
     ensureDirSync(destDir);
 
     const destPath = path.join(destDir, `${nameSlug}.webp`);

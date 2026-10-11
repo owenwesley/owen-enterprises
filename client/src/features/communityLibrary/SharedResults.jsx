@@ -13,7 +13,6 @@ import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import { getFetch, postFetch } from '../../utils/api';
 import { useAppContext } from '../../context/AppContext';
-import { placeholderImage } from '../../utils/mediaImages';
 
 // Read-only cards of what other church members shared (live from the server, never copied into
 // this person's own library). There are deliberately no edit or delete buttons here, and the
@@ -129,7 +128,7 @@ const fixPath = (u) => {
 };
 
 function Cover({ srcs, alt, kind }) {
-  const list = [...srcs.map(fixPath).filter(Boolean), placeholderImage(kind)]
+  const list = [...srcs.map(fixPath).filter(Boolean), `/images/placeholders/no-${kind}-light.webp`]
     .filter((u, i, a) => a.indexOf(u) === i);
   const key = list.join('|');
   const [tried, setTried] = useState(0);

@@ -85,7 +85,6 @@ JWT_SECRET=a-long-random-string
 | `DB_MEETINGS` | `meetings` | |
 | `DB_CHURCH` | `church` | Church module: `churches` and `members`. A **fifth** database; created automatically |
 | `MAINTENANCE_REBUILD_ENABLED` | *unset (off)* | Set `true` to run the weekly table rebuild **and id renumbering** (1..N, no gaps) — see the 1.10.4 entry in *Version history* |
-| `IMAGE_MIGRATION_ENABLED` | *unset (off)* | Set `true` for a **one-time** move of pictures from `images/` into `client/public/images/` (and a copy into `client/build/images`) when the server next starts. Placeholders are left alone. Marker file `images/.migrated-to-public` stops it repeating. See `scripts/migrateImages.js` |
 | `MAINTENANCE_TZ` | `America/Los_Angeles` | Time zone the Sunday 12-4 AM window is measured in |
 | `JWT_SECRET` | *insecure built-in fallback* | **Always set your own** (`npm run secret` prints one; changing it signs everyone out once). Tokens last 8 hours |
 | `CORS_ORIGIN` | *empty = any website may call the API* | **Set in production**: the exact address(es) people use, comma-separated |
@@ -813,14 +812,9 @@ Please read these before putting real users' data on it.
 
 **1.3.27** — last standalone BGTracker release.
 
-## Images: where files go (added after 1.11.29)
+## Images: where uploads are saved (added after 1.11.29)
 
-- **Rule:** the URL never contains `public`. A file in `client/public/images/movies/dvd/x.jpg` is served at `/images/movies/dvd/x.jpg` (dev and production). Always use a leading slash.
-- **Static pictures you add by hand:** `client/public/images/books/`, `client/public/images/movies/{vhs,dvd,hd-dvd,blu-ray}/`, plus the collection folders (`single`, `double-feature`, `triple-feature`, `quadruple-feature`, `boxset`, `boxset-mega-bundle`). Each has a `.gitkeep` so git (and IONOS Deploy Now) keeps the empty folder.
-- **Pictures uploaded in the app** are written by the server into the root `images/` folder (same sub-folders), served by Express at the same `/images/...` URLs. Do NOT move these into `client/public`: the build wipes `client/build`.
-- **Placeholders** exist twice, keep both copies identical: `images/placeholders/` (server copies them when no picture is uploaded) and `client/public/images/placeholders/` (the pages show them). The light ones are grey (#E0E0E0) with black text.
-- **In React code** use `client/src/utils/mediaImages.js`: `dvdImage('x.jpg')`, `bluRayImage(..)`, `movieImage('HD-DVD', 'x.jpg')`, `bookImage(..)`, `placeholderImage('movie' | 'book', 'light' | 'dark')`.
-- **Dev:** `vite.config.js` serves a `/images/...` file from `client/public` when it exists there, otherwise forwards the request to Express.
-- File names are case-sensitive on the Linux host.
-
-**One-time image migration:** `node scripts/migrateImages.js --dry-run` (preview), then `node scripts/migrateImages.js`. It moves real pictures from the root `images/` folder into `client/public/images/` (movies keep their media folder, books go to `books/`), and leaves placeholders alone. Rebuild the client afterwards.
+- **Movie posters** uploaded in the app are saved in `client/public/images/movies/<media>/` (`dvd`, `blu-ray`, `vhs`, `hd-dvd`; box sets / features in their own folders, created on demand). The saved web path is still `/images/movies/<media>/<name>.webp`; the word `public` is never part of a URL.
+- **Book covers** and the "no picture" **placeholders** stay in the root `images/` folder (`images/books/`, `images/placeholders/`).
+- `server.js` serves `client/public/images` first and `images/` second, both at `/images/...`, so older posters still in `images/movies/...` keep working. Copy them across (without overwriting) when you like: `cp -rn images/movies/. client/public/images/movies/`, check the site, then delete the old copies.
+- A re-uploaded poster is saved in the new folder and wins over an older one with the same name in `images/`.
