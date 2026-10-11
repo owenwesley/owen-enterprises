@@ -812,9 +812,11 @@ Please read these before putting real users' data on it.
 
 **1.3.27** — last standalone BGTracker release.
 
-## Images: where uploads are saved (added after 1.11.29)
+## Images: where uploads are saved (updated)
 
-- **Movie posters** uploaded in the app are saved in `client/public/images/movies/<media>/` (`dvd`, `blu-ray`, `vhs`, `hd-dvd`; box sets / features in their own folders, created on demand). The saved web path is still `/images/movies/<media>/<name>.webp`; the word `public` is never part of a URL.
-- **Book covers** and the "no picture" **placeholders** stay in the root `images/` folder (`images/books/`, `images/placeholders/`).
-- `server.js` serves `client/public/images` first and `images/` second, both at `/images/...`, so older posters still in `images/movies/...` keep working. Copy them across (without overwriting) when you like: `cp -rn images/movies/. client/public/images/movies/`, check the site, then delete the old copies.
-- A re-uploaded poster is saved in the new folder and wins over an older one with the same name in `images/`.
+- **Book covers** uploaded in the app are saved in `client/public/images/books/`. Web path: `/images/books/<name>.webp`.
+- **Movie posters** are saved in `client/public/images/movies/<media>/` (`dvd`, `blu-ray`, `vhs`, `hd-dvd`; box sets / features in their own folders, created on demand). Web path: `/images/movies/<media>/<name>.webp`. The word `public` is never part of a URL.
+- The "no picture" placeholders are read from `client/public/images/placeholders/` if present, otherwise from `images/placeholders/`.
+- `server.js` serves `client/public/images` first and the old root `images/` second, both at `/images/...`, so older covers and posters still in `images/` keep working.
+- **Move the older pictures across** (copies only, never overwrites or deletes): `npm run images:copy` (add `-- --dry` to preview). Compare the counts, check the Books and Movies pages, then delete the old `images/books` and `images/movies` yourself.
+- A re-uploaded picture is saved in the new folder and wins over an older one with the same name in `images/`.

@@ -6,6 +6,7 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "client": "npm run dev --prefix client",
+    "images:copy": "node scripts/copyImages.js",
     "check": "node tests/run-all.js",
     "check:church": "node tests/church-role-matrix.js",
     "check:church2": "node tests/church-step2.js",

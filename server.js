@@ -148,9 +148,10 @@ app.use('/patient-doctors',          auth, require('./routes/patientDoctors'));
 
 // ── Static / SPA ──────────────────────────────────────────────────────────────
 // Serve book covers / movie posters saved by the upload controller
-// Movie posters are saved in client/public/images/movies/<media>/ (see
-// controllers/mediaUploadController.js), so that folder is served first; images/ (book covers,
-// placeholders, and any older movie posters) is the fallback. Both give /images/... URLs.
+// Book covers and movie posters are saved in client/public/images/books/ and
+// client/public/images/movies/<media>/ (see controllers/mediaUploadController.js), so that folder
+// is served first; the older root images/ folder (placeholders, older covers and posters) is the
+// fallback. Both give /images/... URLs.
 app.use('/images', express.static(path.join(__dirname, 'client', 'public', 'images')));
 app.use('/images', express.static(path.join(__dirname, 'images')));
 app.use(express.static(path.join(__dirname, './public')));

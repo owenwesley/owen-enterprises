@@ -6,11 +6,12 @@
  * req.file (if an image was sent).
  *
  * Storage layout:
- *   books:  images/books/<sanitized-title>.webp
+ *   books:  client/public/images/books/<sanitized-title>.webp
  *   movies: client/public/images/movies/<media_type>/<sanitized-name>.webp   (media_type e.g. dvd, blu-ray)
  *
- * Both are served at /images/... (server.js serves client/public/images first, then images/).
- * The saved web path stays /images/movies/<media_type>/<name>.webp.
+ * Paths start from the project root. Both are served at /images/... (server.js serves
+ * client/public/images first, then the older root images/ folder as a fallback).
+ * The saved web paths are /images/books/<name>.webp and /images/movies/<media_type>/<name>.webp.
  *
  * If no file was uploaded, a themed placeholder is copied into the same
  * target path instead, so every book/movie always has an image on disk.
@@ -23,10 +24,13 @@ const { sanitizeFilename } = require('../utils/sanitize');
 const { classifyCollection } = require('../utils/collectionFormat');
 const { serverError } = require('../utils/serverError');
 
-const IMAGES_ROOT      = path.join(__dirname, '..', 'images');
-const PLACEHOLDERS_DIR = path.join(IMAGES_ROOT, 'placeholders');
-// Movie posters are saved here: client/public/images/movies/<media>/ (dvd, blu-ray, ...)
-const MOVIES_ROOT      = path.join(__dirname, '..', 'client', 'public', 'images', 'movies');
+const PROJECT_ROOT     = path.join(__dirname, '..');
+const OLD_IMAGES_ROOT  = path.join(PROJECT_ROOT, 'images');                       // older location, still read as a fallback
+const IMAGES_ROOT      = path.join(PROJECT_ROOT, 'client', 'public', 'images');   // where everything new is written
+const BOOKS_ROOT       = path.join(IMAGES_ROOT, 'books');                         // client/public/images/books
+const MOVIES_ROOT      = path.join(IMAGES_ROOT, 'movies');                        // client/public/images/movies/<media>/
+// Placeholders: client/public/images/placeholders first, then the original images/placeholders.
+const PLACEHOLDER_DIRS = [path.join(IMAGES_ROOT, 'placeholders'), path.join(OLD_IMAGES_ROOT, 'placeholders')];
 
 // Standard cover/poster dimensions — even sizing for consistent grid display
 const TARGET_WIDTH  = 400;
@@ -63,9 +67,9 @@ async function processAndSaveImage(buffer, destPath) {
 function copyPlaceholder(kind, theme, destPath) {
   const safeTheme = theme === 'dark' ? 'dark' : 'light';
   const placeholderName = `no-${kind}-${safeTheme}.webp`;
-  const placeholderPath = path.join(PLACEHOLDERS_DIR, placeholderName);
+  const placeholderPath = PLACEHOLDER_DIRS.map((d) => path.join(d, placeholderName)).find((p) => fs.existsSync(p));
 
-  if (!fs.existsSync(placeholderPath)) {
+  if (!placeholderPath) {
     throw new Error(`Missing placeholder asset: ${placeholderName}`);
   }
   fs.copyFileSync(placeholderPath, destPath);
@@ -83,7 +87,7 @@ async function uploadBookImage(req, res) {
     }
 
     const slug    = sanitizeFilename(title);
-    const destDir = path.join(IMAGES_ROOT, 'books');
+    const destDir = BOOKS_ROOT;
     ensureDirSync(destDir);
 
     const destPath = path.join(destDir, `${slug}.webp`);
