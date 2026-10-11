@@ -52,6 +52,28 @@ const { dbNames } = require('../init');
 // ORDER BY list for the users table: non-test accounts first, test accounts last.
 const USERS_TEST_LAST = "(`userName` LIKE 'test%'), `id`";
 
+// ORDER BY list for any other table that has a `date` column (readings, bloodpressures, weights,
+// nutritions, meetings): oldest date first, then user_id, then old id as the tie-breaker. Dates are
+// stored as ISO 'YYYY-MM-DD' text (utils/dateFormat.js), so plain text order IS date order.
+// Tables without a `date` column keep plain old-id order.
+const DATE_ORDER = (hasUserId) => (hasUserId ? '`date`, `user_id`, `id`' : '`date`, `id`');
+
+/** Which of the given tables have a `date` / `user_id` column. Returns Set of "db.table" keys. */
+async function columnFlags(pool, schemas) {
+  const [rows] = await pool.query(
+    `SELECT TABLE_SCHEMA AS dbName, TABLE_NAME AS tableName, COLUMN_NAME AS col
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA IN (?) AND COLUMN_NAME IN ('date', 'user_id')`,
+    [schemas]
+  );
+  const flags = {};
+  for (const r of rows) {
+    const k = `${r.dbName}.${r.tableName}`;
+    (flags[k] = flags[k] || {})[r.col] = true;
+  }
+  return flags;
+}
+
 const WINDOW_DAY = 'Sun';
 const WINDOW_START_HOUR = 0;   // inclusive
 const WINDOW_END_HOUR = 4;     // exclusive
@@ -128,6 +150,7 @@ async function runRebuildAll({ respectWindow = true } = {}) {
     }
 
     const tables = await discoverTables(pool);
+    const flags = await columnFlags(pool, Object.values(dbNames()));
     console.log(`\n── maintenance rebuild: ${tables.length} table(s) ──`);
     for (const { dbName, tableName } of tables) {
       if (respectWindow && !inWindow()) {
@@ -138,9 +161,12 @@ async function runRebuildAll({ respectWindow = true } = {}) {
         console.log(`  ${dbName}.${tableName}`);
         // users: hand out the new ids with test accounts LAST (user names
         // that start with "test", e.g. test, test2, TestUser), each group in
-        // its old id order. Every other table keeps plain old-id order.
-        const reorderBy = (dbName === dbNames().gateway && tableName === 'users')
-          ? USERS_TEST_LAST : null;
+        // its old id order. Tables with a `date` column are ordered by date,
+        // user_id, id. Every other table keeps plain old-id order.
+        const f = flags[`${dbName}.${tableName}`] || {};
+        let reorderBy = null;
+        if (dbName === dbNames().gateway && tableName === 'users') reorderBy = USERS_TEST_LAST;
+        else if (f.date) reorderBy = DATE_ORDER(!!f.user_id);
         await rebuildTable({ table: tableName, dbName, reorderBy });
         summary.rebuilt.push(`${dbName}.${tableName}`);
       } catch (e) {
@@ -204,4 +230,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { scheduleRebuild, runRebuildAll, inWindow, discoverTables, USERS_TEST_LAST };
+module.exports = { scheduleRebuild, runRebuildAll, inWindow, discoverTables, USERS_TEST_LAST, DATE_ORDER, columnFlags };
