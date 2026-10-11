@@ -110,10 +110,12 @@ export default function DoctorHomePage() {
               License {me.licenseNumber}{me.specialty ? ` · ${me.specialty}` : ''}
             </Typography>
             <Typography sx={sxStyles.meta}>
-              {me.clinicName ? `Currently at ${me.clinicName}` : 'No clinic on file'}
+              {me.clinics && me.clinics.length > 0
+                ? `Works at ${me.clinics.map((c) => c.name).join(', ')}`
+                : 'No clinic or hospital on file'}
               {' — '}
               <Link to="/doctor/clinic" style={{ color: '#1a237e', fontWeight: 600 }}>
-                Browse clinics / request a change
+                Browse clinics and hospitals / request a change
               </Link>
             </Typography>
           </>

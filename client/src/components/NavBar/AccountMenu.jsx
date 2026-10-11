@@ -35,7 +35,7 @@ const FEATURES = [
 // Feature access icons and the Logout button. `compact` (phones) shows only
 // the avatar. Which entries appear depends on the role, as before:
 //   patient: My doctors (BG Tracker on), Switch feature, Delete my account
-//   doctor : Doctor home, My clinic
+//   doctor : Doctor home, Where I work
 //   admin  : Doctor approvals
 // Everyone: My profile, Feature access, Log out.
 export default function AccountMenu({ compact = false }) {
@@ -104,7 +104,7 @@ export default function AccountMenu({ compact = false }) {
         {isPatient && featurePreferences.chkBgtracker === 1 &&
           linkItem('/my-doctors', <LocalHospitalIcon fontSize="small" />, 'My doctors')}
         {user.role === 'doctor' && linkItem('/doctor', <DashboardIcon fontSize="small" />, 'Doctor home')}
-        {user.role === 'doctor' && linkItem('/doctor/clinic', <BusinessIcon fontSize="small" />, 'My clinic')}
+        {user.role === 'doctor' && linkItem('/doctor/clinic', <BusinessIcon fontSize="small" />, 'Where I work')}
         {user.role === 'admin' && linkItem('/admin', <FactCheckIcon fontSize="small" />, 'Doctor approvals')}
         {linkItem('/feature-preferences', <SettingsIcon fontSize="small" />, 'Feature access')}
 

@@ -40,8 +40,9 @@
  *                  feature_preferences have NO foreign key on it, it is just
  *                  a number), plus doctor_profiles.user_id and
  *                  doctor_patients.doctor_id / patient_id (real FKs).
- *   clinics.id  <- doctor_profiles.clinic_id (real FK) and
- *                  doctor_profiles.requestedClinicId (plain number).
+ *   clinics.id  <- doctor_clinics.clinic_id and doctor_clinic_requests.clinic_id
+ *                  (real FKs), plus, on a database upgraded from before 1.12.0,
+ *                  the old doctor_profiles.clinic_id / requestedClinicId.
  *
  * Any real foreign key found in information_schema is remapped too. The
  * plain-number references above are listed in ID_REFERENCES below; if a new

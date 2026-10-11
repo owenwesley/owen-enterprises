@@ -13,9 +13,11 @@
  *
  * What --apply does:
  *   - a row whose user_id / doctor_id / patient_id has no matching users row is DELETED
- *   - doctor_profiles.clinic_id pointing at a missing clinic is set to NULL
- *   - doctor_profiles.requestedClinicId pointing at a missing clinic is set to
- *     NULL and clinicRequestStatus back to 'none'
+ *   - a doctor_clinics or doctor_clinic_requests row whose clinic_id has no
+ *     matching clinics row is DELETED
+ *   - (databases upgraded from before 1.12.0 only) a leftover
+ *     doctor_profiles.clinic_id pointing at a missing clinic is set to NULL, and
+ *     doctor_profiles.requestedClinicId to NULL with clinicRequestStatus 'none'
  *
  * Take a backup first. Refuses to --apply if any affected table is not InnoDB
  * (a transaction can't undo changes to it).
@@ -47,13 +49,17 @@ async function main(apply) {
       if (Number(c.n) > 0) plan.push({ ...r, n: Number(c.n), where, action: 'delete' });
     }
 
-    // Clinic ids only live in doctor_profiles (gateway database).
+    // Clinic ids live in the gateway database only (doctor_clinics, doctor_clinic_requests).
     for (const r of await findRefColumns(conn, CLINIC_COLS)) {
       if (r.schema !== gateway) continue;
       const where = `t.${q(r.column)} IS NOT NULL AND NOT EXISTS ` +
                     `(SELECT 1 FROM ${qt(gateway, 'clinics')} c WHERE c.id = t.${q(r.column)})`;
       const [[c]] = await conn.query(`SELECT COUNT(*) AS n FROM ${qt(r.schema, r.table)} t WHERE ${where}`);
-      if (Number(c.n) > 0) plan.push({ ...r, n: Number(c.n), where, action: 'null' });
+      // doctor_clinics / doctor_clinic_requests hold the id in a NOT NULL column:
+      // the row is meaningless without its clinic, so it is deleted. A leftover
+      // nullable pointer (the old doctor_profiles.clinic_id) is set to NULL.
+      const linkTable = r.table === 'doctor_clinics' || r.table === 'doctor_clinic_requests';
+      if (Number(c.n) > 0) plan.push({ ...r, n: Number(c.n), where, action: linkTable ? 'delete' : 'null' });
     }
 
     if (plan.length === 0) {

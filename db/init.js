@@ -14,6 +14,7 @@
 
 const mysql = require('mysql2/promise');
 const { syncColumns, syncEnums } = require('./schemaSync');
+const { migrateLegacyClinics } = require('./clinicMigration');
 
 function baseConfig() {
   return {
@@ -52,10 +53,10 @@ function tableMap(names) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {
-        // A doctor's current workplace. Deliberately just informational — it
-        // does not gate anything and changing it never touches doctor_patients.
-        // A doctor is a verified, individually-approved account; the clinic
-        // they currently work at is metadata about that account, not a second
+        // A place a doctor can work: a clinic or a hospital (`type`). Deliberately
+        // just informational — it does not gate anything and changing it never
+        // touches doctor_patients. A doctor is a verified, individually-approved
+        // account; where they work is metadata about that account, not a second
         // layer of access control. See the "Clinics" section of the README for
         // why patient links aren't tied to it.
         name: 'clinics',
@@ -63,6 +64,7 @@ function tableMap(names) {
           id        INT AUTO_INCREMENT PRIMARY KEY,
           name      VARCHAR(150) NOT NULL,
           address   VARCHAR(255) NOT NULL DEFAULT '',
+          type      ENUM('clinic','hospital') NOT NULL DEFAULT 'clinic',
           createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
@@ -73,11 +75,39 @@ function tableMap(names) {
           licenseNumber VARCHAR(64)  NOT NULL,
           specialty     VARCHAR(100) NOT NULL DEFAULT '',
           inviteCode    VARCHAR(12)  UNIQUE,
-          clinic_id     INT          NULL,
-          requestedClinicId   INT NULL,
-          clinicRequestStatus ENUM('none','pending') NOT NULL DEFAULT 'none',
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (clinic_id) REFERENCES clinics(id) ON DELETE SET NULL
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+        // Where a doctor works: any number of clinics and/or hospitals, one of
+        // them marked primary. Informational only, like `clinics` itself, and
+        // never touches doctor_patients. The old single doctor_profiles.clinic_id
+        // column is copied in here by db/clinicMigration.js.
+        name: 'doctor_clinics',
+        sql: `CREATE TABLE IF NOT EXISTS doctor_clinics (
+          id        INT AUTO_INCREMENT PRIMARY KEY,
+          doctor_id INT NOT NULL,
+          clinic_id INT NOT NULL,
+          isPrimary TINYINT(1) NOT NULL DEFAULT 0,
+          createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_doctor_clinic (doctor_id, clinic_id),
+          FOREIGN KEY (doctor_id) REFERENCES users(id)   ON DELETE CASCADE,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+        // A doctor's own request to add or leave one place; an admin approves
+        // or rejects it. Submitting never changes doctor_clinics by itself.
+        name: 'doctor_clinic_requests',
+        sql: `CREATE TABLE IF NOT EXISTS doctor_clinic_requests (
+          id        INT AUTO_INCREMENT PRIMARY KEY,
+          doctor_id INT NOT NULL,
+          clinic_id INT NOT NULL,
+          action    ENUM('add','remove') NOT NULL DEFAULT 'add',
+          createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_doctor_clinic_request (doctor_id, clinic_id),
+          FOREIGN KEY (doctor_id) REFERENCES users(id)   ON DELETE CASCADE,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {
@@ -721,6 +751,10 @@ async function initDatabases() {
       }
     }
   }
+
+  // Copy the old one-clinic-per-doctor columns into doctor_clinics (a no-op
+  // on a fresh database and on every start after the first).
+  await migrateLegacyClinics(conn, names.gateway);
 
   await conn.end();
   console.log('\n──────────────────────────────────────────');

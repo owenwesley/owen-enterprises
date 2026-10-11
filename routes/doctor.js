@@ -8,9 +8,9 @@ const { selectBloodPressures } = require('../db/sql/bgtracker/bloodpressures');
 const { selectReadings } = require('../db/sql/bgtracker/readings');
 const { selectMedications } = require('../db/sql/bgtracker/medications');
 const {
-  selectClinics, selectClinicById,
-  selectMyClinicRequest, setClinicRequest, clearClinicRequest,
+  selectClinics, selectClinicById, selectMyRequests, upsertRequest, deleteRequest,
 } = require('../db/sql/owenenterprises/clinics');
+const { listForDoctor, MAX_PLACES_PER_DOCTOR } = require('../utils/doctorClinics');
 const { serverError } = require('../utils/serverError');
 
 const router = express.Router();
@@ -25,15 +25,17 @@ router.get('/me', requireDoctor, async (req, res) => {
       `SELECT u.id, u.firstName, u.lastName, u.doctorStatus,
               COALESCE(p.licenseNumber, '') AS licenseNumber,
               COALESCE(p.specialty, '')     AS specialty,
-              p.inviteCode, c.name AS clinicName
+              p.inviteCode
          FROM users u
          LEFT JOIN doctor_profiles p ON p.user_id = u.id
-         LEFT JOIN clinics c ON c.id = p.clinic_id
         WHERE u.id = ?`,
       [req.doctor.id]
     );
     if (!rows || rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    return res.json({ results: rows[0] });
+    // `clinics` = every clinic / hospital they work at, primary first;
+    // `clinicName` = the primary one's name (kept for older callers).
+    const clinics = await listForDoctor(db.promise(), req.doctor.id);
+    return res.json({ results: { ...rows[0], clinics, clinicName: clinics.length ? clinics[0].name : null } });
   } catch (e) {
     return serverError(res, e);
   }
@@ -115,22 +117,25 @@ router.get('/patients/:patientId/medications',
     }
   });
 
-// ── Clinic browse + self-service change request ──────────────────────────────
+// ── Clinic / hospital browse + self-service add or remove requests ──────────
 // Available to a doctor even while still 'pending' approval (requireDoctor,
 // NOT requireApprovedDoctor) — browsing/requesting is read-only-ish and useful
-// during onboarding, and it's the doctor's own profile row being touched,
-// never patient data. Submitting a request never writes clinic_id itself —
-// only an admin approving does that (see routes/admin.js).
+// during onboarding, and it's the doctor's own profile being touched, never
+// patient data. Submitting a request never changes the doctor's places itself
+// — only an admin approving does that (see routes/admin.js).
 
-// GET /doctor/clinics?q=search — browse/search all clinics
+// GET /doctor/clinics?q=search&type=clinic|hospital — browse/search all places
 router.get('/clinics', requireDoctor, async (req, res) => {
   const q = String(req.query.q || '').trim();
+  const type = String(req.query.type || '');
   try {
-    const [results] = q
+    const where = [];
+    const params = [];
+    if (q) { where.push('name LIKE ?'); params.push(`%${q}%`); }
+    if (type === 'clinic' || type === 'hospital') { where.push('type = ?'); params.push(type); }
+    const [results] = where.length
       ? await db.promise().query(
-          'SELECT id, name, address FROM clinics WHERE name LIKE ? ORDER BY name',
-          [`%${q}%`]
-        )
+          `SELECT id, name, address, type FROM clinics WHERE ${where.join(' AND ')} ORDER BY name`, params)
       : await db.promise().query(selectClinics);
     return res.json({ results });
   } catch (e) {
@@ -138,39 +143,55 @@ router.get('/clinics', requireDoctor, async (req, res) => {
   }
 });
 
-// GET /doctor/clinic-request — this doctor's current clinic + pending request
-router.get('/clinic-request', requireDoctor, async (req, res) => {
+// GET /doctor/my-clinics — this doctor's places (primary first) and pending requests
+router.get('/my-clinics', requireDoctor, async (req, res) => {
   try {
-    const [rows] = await db.promise().query(selectMyClinicRequest, [req.doctor.id]);
-    return res.json({ results: rows[0] || null });
+    const clinics = await listForDoctor(db.promise(), req.doctor.id);
+    const [requests] = await db.promise().query(selectMyRequests, [req.doctor.id]);
+    return res.json({ results: { clinics, requests } });
   } catch (e) {
     return serverError(res, e);
   }
 });
 
-// POST /doctor/clinic-request { clinic_id } — submit/replace a pending request
-router.post('/clinic-request', requireDoctor, async (req, res) => {
+// POST /doctor/clinic-requests { clinic_id, action: 'add' | 'remove' } — submit a request.
+// Asking again for the same place replaces the earlier request.
+router.post('/clinic-requests', requireDoctor, async (req, res) => {
   const clinicId = Number(req.body.clinic_id);
+  const action = req.body.action === undefined ? 'add' : req.body.action;
   if (!Number.isInteger(clinicId) || clinicId <= 0) {
     return res.status(400).json({ error: 'clinic_id must be a positive integer' });
   }
+  if (action !== 'add' && action !== 'remove') {
+    return res.status(400).json({ error: "action must be 'add' or 'remove'" });
+  }
   try {
-    const [clinicRows] = await db.promise().query(selectClinicById, [clinicId]);
-    if (clinicRows.length === 0) {
-      return res.status(400).json({ error: 'No clinic with that id' });
+    const conn = db.promise();
+    const [clinicRows] = await conn.query(selectClinicById, [clinicId]);
+    if (clinicRows.length === 0) return res.status(400).json({ error: 'No clinic or hospital with that id' });
+    const mine = await listForDoctor(conn, req.doctor.id);
+    const linked = mine.some((c) => Number(c.id) === clinicId);
+    if (action === 'add' && linked) return res.status(400).json({ error: 'You are already attached to that place' });
+    if (action === 'remove' && !linked) return res.status(400).json({ error: 'You are not attached to that place' });
+    if (action === 'add' && mine.length >= MAX_PLACES_PER_DOCTOR) {
+      return res.status(400).json({ error: `You can be attached to at most ${MAX_PLACES_PER_DOCTOR} places` });
     }
-    await db.promise().query(setClinicRequest, [clinicId, req.doctor.id]);
-    return res.json({ message: 'Clinic change requested' });
+    await conn.query(upsertRequest, [req.doctor.id, clinicId, action, action]);
+    return res.json({ message: action === 'add' ? 'Add requested' : 'Removal requested' });
   } catch (e) {
     return serverError(res, e);
   }
 });
 
-// DELETE /doctor/clinic-request — withdraw own pending request
-router.delete('/clinic-request', requireDoctor, async (req, res) => {
+// DELETE /doctor/clinic-requests/:clinicId — withdraw own pending request for that place
+router.delete('/clinic-requests/:clinicId', requireDoctor, async (req, res) => {
+  const clinicId = Number(req.params.clinicId);
+  if (!Number.isInteger(clinicId) || clinicId <= 0) {
+    return res.status(400).json({ error: 'clinicId must be a positive integer' });
+  }
   try {
-    await db.promise().query(clearClinicRequest, [req.doctor.id]);
-    return res.json({ message: 'Clinic request withdrawn' });
+    await db.promise().query(deleteRequest, [req.doctor.id, clinicId]);
+    return res.json({ message: 'Request withdrawn' });
   } catch (e) {
     return serverError(res, e);
   }

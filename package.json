@@ -1,6 +1,6 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.11.29",
+  "version": "1.12.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,6 +14,7 @@
     "check:church4": "node tests/church-announce.js",
     "check:church5": "node tests/church-roles.js",
     "check:church6": "node tests/church-shared-library.js",
+    "check:clinics": "node tests/clinics-hospitals.js",
     "check:hipaa": "node tests/hipaa-gate.js",
     "check:mfa": "node tests/mfa.js",
     "check:twilio": "node tests/twilio-request.js",

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * tests/run-all.js   (npm run check)   - 1.11.29
+ * tests/run-all.js   (npm run check)   - 1.12.0
  *
  * Runs EVERY automated check in one go and prints one summary line per suite. It starts its own copies of
  * the server on ports 4110 / 4111 (so the server you normally run is left alone, and no rate limits or
  * weekly maintenance get in the way), runs the suites, then stops them. Uses the database in your .env;
  * the suites only create and remove throwaway test_* users and churches.
  *
- *   server on :4110  HIPAA gate off, rate limits off   -> check, church 1-7
+ *   server on :4110  HIPAA gate off, rate limits off   -> check, church 1-7, clinics
  *   server on :4111  HIPAA gate on, text messages mocked -> hipaa, mfa
  *   no server        -> twilio (local fake), hardening (starts its own)
  *
@@ -31,6 +31,7 @@ const SUITES = [
   { name: 'church5',   file: 'church-roles.js',            server: 'plain' },
   { name: 'church6',   file: 'church-shared-library.js',   server: 'plain' },
   { name: 'church7',   file: 'church-borrow-extras.js',    server: 'plain' },
+  { name: 'clinics',   file: 'clinics-hospitals.js',       server: 'plain' },
   { name: 'hipaa',     file: 'hipaa-gate.js',              server: 'hipaa' },
   { name: 'mfa',       file: 'mfa.js',                     server: 'hipaa' },
   { name: 'twilio',    file: 'twilio-request.js',          server: null },
