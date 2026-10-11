@@ -73,8 +73,6 @@ function locate(url) {
     console.log('MISSING = the database points at a file that is not in client/public/images or images (copy it there, or run npm run images:copy).');
   }
   process.exit(counts.missing || counts.badpath ? 1 : 0);
-})().catch((e) => {
-  const why = e.message || (e.errors && e.errors.map((x) => x.message || x.code).join('; ')) || e.code || String(e);
+})().catch((e) => { const why = e.message || (e.errors && e.errors.map((x) => x.message || x.code).join('; ')) || e.code || String(e);
   console.error('images:check failed:', why);
-  console.error('  (database host: ' + (process.env.DB_HOST || 'localhost') + ', user: ' + (process.env.DB_USER || '(none)') + ', .env found: ' + fs.existsSync(path.resolve(__dirname, '../.env')) + ')'); process.exit(2);
-});
+  console.error('  (database host: ' + (process.env.DB_HOST || 'localhost') + ', user: ' + (process.env.DB_USER || '(none)') + ', .env found: ' + fs.existsSync(path.resolve(__dirname, '../.env')) + ')'); process.exit(2); });
