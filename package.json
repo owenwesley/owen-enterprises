@@ -22,7 +22,10 @@
     "check:church7": "node tests/church-borrow-extras.js",
     "check:ui": "node tests/ui-borrow.js",
     "check:hardening": "node tests/hardening.js",
-    "check:basic": "node tests/prerelease-check.js"
+    "check:basic": "node tests/prerelease-check.js",
+    "images:check": "node scripts/checkImages.js",
+    "images:backup": "node scripts/backupImages.js",
+    "images:restore": "node scripts/backupImages.js --restore"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

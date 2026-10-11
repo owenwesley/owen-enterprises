@@ -37,6 +37,16 @@ const TARGET_WIDTH  = 400;
 const TARGET_HEIGHT = 600;
 const WEBP_QUALITY   = 82;
 
+// Only these folders are created under movies/<media>/. Anything else (a typo, "books", "../x")
+// goes to 'other', so a free-text media type can never create stray folders.
+const MEDIA_FOLDERS = new Set(['dvd', 'blu-ray', 'vhs', 'hd-dvd', 'other']);
+function safeMediaFolder(mediaType) {
+  const slug = sanitizeFilename(mediaType);
+  if (slug === 'bluray') return 'blu-ray';
+  if (slug === 'hddvd') return 'hd-dvd';
+  return MEDIA_FOLDERS.has(slug) ? slug : 'other';
+}
+
 /**
  * Ensures a directory exists, creating it (and any missing parents)
  * synchronously if it does not.
@@ -120,7 +130,7 @@ async function uploadMovieImage(req, res) {
     }
 
     const nameSlug  = sanitizeFilename(name);
-    const mediaSlug = sanitizeFilename(media_type); // e.g. 'dvd', 'streaming'
+    const mediaSlug = safeMediaFolder(media_type); // dvd, blu-ray, vhs, hd-dvd, else 'other'
     const destDir   = path.join(MOVIES_ROOT, mediaSlug);
     ensureDirSync(destDir);
 
@@ -207,5 +217,5 @@ async function uploadCollectionImage(req, res) {
 
 module.exports = {
   uploadBookImage, uploadMovieImage, uploadCollectionImage,
-  ensureDirSync, copyPlaceholder, processAndSaveImage,
+  ensureDirSync, copyPlaceholder, processAndSaveImage, safeMediaFolder,
 };
