@@ -122,11 +122,12 @@ export function useMovies() {
    * Uploads a movie poster (or triggers the server's placeholder fallback
    * if `file` is null) and returns the resulting img_url.
    */
-  const uploadMoviePoster = useCallback(async (name, mediaType, file, theme) => {
+  const uploadMoviePoster = useCallback(async (name, mediaType, file, theme, currentUrl) => {
     const formData = new FormData();
     formData.append('name', name);
     formData.append('media_type', mediaType || 'dvd');
     if (theme) formData.append('theme', theme);
+    if (currentUrl) formData.append('current_img_url', currentUrl);
     if (file)  formData.append('image', file);
     const data = await postFormData('/communitylibrary/upload/movie', formData);
     return data?.img_url || null;

@@ -6,12 +6,17 @@
  * req.file (if an image was sent).
  *
  * Storage layout:
- *   books:  client/public/images/books/<sanitized-title>.webp
- *   movies: client/public/images/movies/<media_type>/<sanitized-name>.webp   (media_type e.g. dvd, blu-ray)
+ *   books:  client/public/images/communitylibrary/books/<sanitized-title>.webp
+ *   movies: client/public/images/communitylibrary/movies/<media_type>/<sanitized-name>.webp   (media_type e.g. dvd, blu-ray)
  *
  * Paths start from the project root. Both are served at /images/... (server.js serves
  * client/public/images first, then the older root images/ folder as a fallback).
- * The saved web paths are /images/books/<name>.webp and /images/movies/<media_type>/<name>.webp.
+ * The saved web paths are /images/communitylibrary/books/<name>.webp and
+ * /images/communitylibrary/movies/<media_type>/<name>.webp.
+ *
+ * Two different items never share a file: if <name>.webp already exists, the new one is saved as
+ * <name>-2.webp, <name>-3.webp, ... unless the client says (current_img_url) that the existing file is
+ * the item's own picture, in which case it is replaced.
  *
  * If no file was uploaded, a themed placeholder is copied into the same
  * target path instead, so every book/movie always has an image on disk.
@@ -23,12 +28,14 @@ const sharp = require('sharp');
 const { sanitizeFilename } = require('../utils/sanitize');
 const { classifyCollection } = require('../utils/collectionFormat');
 const { serverError } = require('../utils/serverError');
+const { LIB_FOLDER, toNewUrl } = require('../utils/imageLayout');
 
 const PROJECT_ROOT     = path.join(__dirname, '..');
 const OLD_IMAGES_ROOT  = path.join(PROJECT_ROOT, 'images');                       // older location, still read as a fallback
 const IMAGES_ROOT      = path.join(PROJECT_ROOT, 'client', 'public', 'images');   // where everything new is written
-const BOOKS_ROOT       = path.join(IMAGES_ROOT, 'books');                         // client/public/images/books
-const MOVIES_ROOT      = path.join(IMAGES_ROOT, 'movies');                        // client/public/images/movies/<media>/
+const LIB_ROOT         = path.join(IMAGES_ROOT, LIB_FOLDER);                      // client/public/images/communitylibrary
+const BOOKS_ROOT       = path.join(LIB_ROOT, 'books');                            // .../communitylibrary/books
+const MOVIES_ROOT      = path.join(LIB_ROOT, 'movies');                           // .../communitylibrary/movies/<media>/
 // Placeholders: client/public/images/placeholders first, then the original images/placeholders.
 const PLACEHOLDER_DIRS = [path.join(IMAGES_ROOT, 'placeholders'), path.join(OLD_IMAGES_ROOT, 'placeholders')];
 
@@ -45,6 +52,24 @@ function safeMediaFolder(mediaType) {
   if (slug === 'bluray') return 'blu-ray';
   if (slug === 'hddvd') return 'hd-dvd';
   return MEDIA_FOLDERS.has(slug) ? slug : 'other';
+}
+
+/**
+ * Chooses the file for a new picture inside destDir (web folder webDir, e.g. '/images/communitylibrary/books').
+ * <slug>.webp if it is free, or if currentUrl (the item's own existing picture) points at it; otherwise
+ * <slug>-2.webp, <slug>-3.webp, ... so one item can never overwrite another item's picture.
+ */
+function pickTarget(destDir, webDir, slug, currentUrl) {
+  const own = toNewUrl(String(currentUrl || '').trim());
+  for (let n = 1; n < 1000; n++) {
+    const name = n === 1 ? `${slug}.webp` : `${slug}-${n}.webp`;
+    const web = `${webDir}/${name}`;
+    if (!fs.existsSync(path.join(destDir, name)) || own === web) {
+      return { destPath: path.join(destDir, name), webPath: web };
+    }
+  }
+  const name = `${slug}-${Date.now()}.webp`;
+  return { destPath: path.join(destDir, name), webPath: `${webDir}/${name}` };
 }
 
 /**
@@ -91,7 +116,7 @@ function copyPlaceholder(kind, theme, destPath) {
  */
 async function uploadBookImage(req, res) {
   try {
-    const { title, theme } = req.body;
+    const { title, theme, current_img_url } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'title is required' });
     }
@@ -100,8 +125,7 @@ async function uploadBookImage(req, res) {
     const destDir = BOOKS_ROOT;
     ensureDirSync(destDir);
 
-    const destPath = path.join(destDir, `${slug}.webp`);
-    const webPath   = `/images/books/${slug}.webp`;
+    const { destPath, webPath } = pickTarget(destDir, `/images/${LIB_FOLDER}/books`, slug, current_img_url);
 
     if (req.file && req.file.buffer) {
       await processAndSaveImage(req.file.buffer, destPath);
@@ -121,7 +145,7 @@ async function uploadBookImage(req, res) {
  */
 async function uploadMovieImage(req, res) {
   try {
-    const { name, media_type, theme } = req.body;
+    const { name, media_type, theme, current_img_url } = req.body;
     if (!name) {
       return res.status(400).json({ error: 'name is required' });
     }
@@ -134,8 +158,7 @@ async function uploadMovieImage(req, res) {
     const destDir   = path.join(MOVIES_ROOT, mediaSlug);
     ensureDirSync(destDir);
 
-    const destPath = path.join(destDir, `${nameSlug}.webp`);
-    const webPath   = `/images/movies/${mediaSlug}/${nameSlug}.webp`;
+    const { destPath, webPath } = pickTarget(destDir, `/images/${LIB_FOLDER}/movies/${mediaSlug}`, nameSlug, current_img_url);
 
     if (req.file && req.file.buffer) {
       await processAndSaveImage(req.file.buffer, destPath);
@@ -163,7 +186,7 @@ async function uploadMovieImage(req, res) {
  */
 async function uploadCollectionImage(req, res) {
   try {
-    const { collectionTitle, mediaType, theme } = req.body;
+    const { collectionTitle, mediaType, theme, current_img_url } = req.body;
 
     if (!collectionTitle) {
       return res.status(400).json({ error: 'collectionTitle is required' });
@@ -195,8 +218,7 @@ async function uploadCollectionImage(req, res) {
     const destDir  = path.join(MOVIES_ROOT, format.slug);
     ensureDirSync(destDir);
 
-    const destPath = path.join(destDir, `${nameSlug}.webp`);
-    const webPath  = `/images/movies/${format.slug}/${nameSlug}.webp`;
+    const { destPath, webPath } = pickTarget(destDir, `/images/${LIB_FOLDER}/movies/${format.slug}`, nameSlug, current_img_url);
 
     if (req.file && req.file.buffer) {
       await processAndSaveImage(req.file.buffer, destPath);
@@ -217,5 +239,5 @@ async function uploadCollectionImage(req, res) {
 
 module.exports = {
   uploadBookImage, uploadMovieImage, uploadCollectionImage,
-  ensureDirSync, copyPlaceholder, processAndSaveImage, safeMediaFolder,
+  ensureDirSync, copyPlaceholder, processAndSaveImage, safeMediaFolder, pickTarget,
 };

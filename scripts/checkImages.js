@@ -29,8 +29,10 @@ function locate(url) {
   if (!u.startsWith('/images/')) return { state: 'badpath' };
   let rel;
   try { rel = decodeURI(u.slice('/images/'.length)); } catch { return { state: 'badpath' }; }
-  for (const d of DIRS) {
-    const p = path.join(d, rel);
+  const rels = [rel];
+  if (/^(books|movies)\//.test(rel)) rels.unshift('communitylibrary/' + rel);   // pre-1.12.3 path: server.js answers it from communitylibrary/ first
+  for (const d of DIRS) for (const r of rels) {
+    const p = path.join(d, r);
     if (p.startsWith(d + path.sep) && fs.existsSync(p)) return { state: 'ok', where: path.relative(ROOT, p) };
   }
   return { state: 'missing' };
@@ -42,10 +44,11 @@ function locate(url) {
     user: process.env.DB_USER, password: process.env.DB_PASS,
     database: process.env.DB_COMMUNITYLIBRARY || 'communitylibrary',
   });
-  const counts = { ok: 0, empty: 0, external: 0, badpath: 0, missing: 0 };
+  const counts = { ok: 0, empty: 0, external: 0, badpath: 0, missing: 0, old: 0 };
   const note = (kind, id, label, field, url) => {
     const r = locate(url);
     counts[r.state]++;
+    if (/^\/images\/(books|movies)\//.test(String(url || ''))) counts.old++;
     if (r.state === 'ok' && !ALL) return;
     if (r.state === 'external' && !ALL) return;
     console.log(`${r.state.toUpperCase().padEnd(8)} ${kind} #${id} "${label}" ${field}: ${url || '(empty)'}`);
@@ -69,6 +72,7 @@ function locate(url) {
   }
   await db.end();
   console.log(`\nok ${counts.ok}, empty ${counts.empty}, missing ${counts.missing}, not a /images path ${counts.badpath}, external ${counts.external}`);
+  if (counts.old) console.log(`${counts.old} picture path(s) still use the pre-1.12.3 /images/books|movies/ form: run npm run images:migrate (report), then -- --apply.`);
   if (counts.missing || counts.badpath) {
     console.log('MISSING = the database points at a file that is not in client/public/images or images (copy it there, or run npm run images:copy).');
   }

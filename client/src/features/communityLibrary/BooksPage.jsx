@@ -174,7 +174,7 @@ export default function BooksPage() {
     const bk = dialog.book;
     // Only upload when a new file was chosen or there is no cover yet: an
     // upload with no file overwrites the stored cover with the placeholder.
-    const imgUrl = (editFile || !bk.img_url) ? await uploadBookCover(bk.title, editFile, null) : null;
+    const imgUrl = (editFile || !bk.img_url) ? await uploadBookCover(bk.title, editFile, null, bk.img_url) : null;
     const err = await saveBook({ ...bk, img_url: imgUrl || bk.img_url });
     if (err) return; // server message is already shown; keep the dialog open
     setDialog(null);

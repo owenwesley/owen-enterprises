@@ -142,7 +142,8 @@ owenenterprises/                 ← project root = the Node/Express server
 │   ├── coerce.js                toBit / toNum / io & lost mapping for client input
 │   ├── dbRespond.js             UPDATE replies (404 when nothing matched)
 │   ├── collectionFormat.js, sanitize.js
-├── images/                      uploaded covers (books/, movies/, placeholders/) → served at /images
+├── images/                      older root pictures + placeholders (fallback) → served at /images
+│                                (new uploads: client/public/images/communitylibrary/books|movies/, bgtracker/ reserved)
 └── client/                      ← the React app (its own package.json)
     ├── package.json             app version lives here
     ├── index.html           Vite entry page (loads src/index.jsx)
@@ -402,6 +403,13 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.12.3** — pictures are grouped by app: `communitylibrary/` (books, movies) and `bgtracker/`.
+- **New layout** under `client/public/images/`: `communitylibrary/books/`, `communitylibrary/movies/<dvd|blu-ray|vhs|hd-dvd|other>/`, `bgtracker/` (empty, reserved; BG Tracker has no pictures yet), `placeholders/` (unchanged, shared). URLs are `/images/communitylibrary/books/<name>.webp` and `/images/communitylibrary/movies/<media>/<name>.webp`. The path helper is `utils/imageLayout.js`.
+- **Upgrade (existing install):** back up the DATABASE and the pictures (`npm run images:backup`), then `npm run images:migrate` (report only) and, if it looks right, `npm run images:migrate -- --apply`. It moves `client/public/images/books|movies` into `communitylibrary/` (never overwrites, never deletes a picture) and rewrites `books.img_url`, `movies.img_url`, `movies.img1..img12` from `/images/books/...` / `/images/movies/...` to the new URLs (one transaction per table; safe to run twice). Then `npm run images:copy` copies anything still in the old root `images/books|movies` into the new folders, and `npm run images:check` confirms every picture is found (it also counts rows still on the old paths).
+- **Old URLs keep working:** `server.js` answers `/images/books/...` and `/images/movies/...` from `communitylibrary/` first, then falls back to the old root `images/` folders, so nothing breaks between deploying 1.12.3 and running the migration.
+- **No more overwriting:** two items with the same title (and media type) used to share one file, so the second upload replaced the first's picture. Now a taken name gets `-2`, `-3`, ... The client sends `current_img_url` when it re-uploads a picture for an existing row, so that row's own file is replaced instead.
+- **Tests:** `npm run check:images` (14 checks, no server needed); `npm run check` is now 14 suites, 575 checks, all pass (MariaDB 10.11). Migration run end to end on a database in the old layout (report, `--apply`, second run, old and new URLs served, uploads with and without `current_img_url`); `vite build` OK. Not verified: MySQL 8, a browser, Windows.
 
 **1.12.2** — `createdAt` / `updatedAt` are always the last columns of a table.
 - **Definitions:** in `db/init.js` and `db/db.js` every table with `createdAt` (and `updatedAt`, only `church.announcements` has one) now lists them last, createdAt first. Only two definitions needed changing: `borrow_requests` (createdAt was before answeredAt, auto, hideOwner, hideRequester) and `mfa_trusted_devices` (createdAt was before expiresAt, lastUsedAt).
@@ -833,12 +841,14 @@ Please read these before putting real users' data on it.
 
 ## Images: where uploads are saved (updated)
 
-- **Book covers** uploaded in the app are saved in `client/public/images/books/`. Web path: `/images/books/<name>.webp`.
-- **Movie posters** are saved in `client/public/images/movies/<media>/` (`dvd`, `blu-ray`, `vhs`, `hd-dvd`; box sets / features in their own folders, created on demand). Web path: `/images/movies/<media>/<name>.webp`. The word `public` is never part of a URL.
+- **Book covers** uploaded in the app are saved in `client/public/images/communitylibrary/books/`. Web path: `/images/communitylibrary/books/<name>.webp`.
+- **Movie posters** are saved in `client/public/images/communitylibrary/movies/<media>/` (`dvd`, `blu-ray`, `vhs`, `hd-dvd`; box sets / features in their own folders, created on demand). Web path: `/images/communitylibrary/movies/<media>/<name>.webp`. The word `public` is never part of a URL.
+- **BG Tracker** pictures (none yet) will go in `client/public/images/bgtracker/` (URL `/images/bgtracker/...`).
 - The "no picture" placeholders are read from `client/public/images/placeholders/` if present, otherwise from `images/placeholders/`.
-- `server.js` serves `client/public/images` first and the old root `images/` second, both at `/images/...`, so older covers and posters still in `images/` keep working.
-- **Move the older pictures across** (copies only, never overwrites or deletes): `npm run images:copy` (add `-- --dry` to preview). Compare the counts, check the Books and Movies pages, then delete the old `images/books` and `images/movies` yourself.
-- A re-uploaded picture is saved in the new folder and wins over an older one with the same name in `images/`.
+- `server.js` serves `client/public/images` first and the old root `images/` second, both at `/images/...`, so older covers and posters still in `images/` keep working. Pre-1.12.3 URLs (`/images/books/...`, `/images/movies/...`) are answered from `communitylibrary/` first.
+- **Move pictures to the 1.12.3 layout:** `npm run images:migrate` (report) then `-- --apply` (moves `client/public/images/books|movies` into `communitylibrary/` and rewrites the paths in the database; back up the database first; see the 1.12.3 entry).
+- **Move the older root `images/` pictures across** (copies only, never overwrites or deletes) into `communitylibrary/`: `npm run images:copy` (add `-- --dry` to preview). Compare the counts, check the Books and Movies pages, then delete the old `images/books` and `images/movies` yourself.
+- A re-uploaded picture is saved in the new folder and wins over an older one with the same name in `images/`. A different item with the same title gets `-2`, `-3`, ... instead of replacing the first one's file.
 - **Media folders are a fixed list.** A movie upload's `media_type` is matched to `dvd`, `blu-ray`, `vhs` or `hd-dvd` (so `Blu-Ray`, `BluRay`, `HD-DVD` all land in the right folder); anything else goes to `movies/other/`. A free-text value can no longer create stray folders (such as `movies/books/`).
 - **Check the pictures against the database** (read-only): `npm run images:check` (`-- movies`, `-- books`, `-- --all`). It lists every row whose stored picture path is empty, not a `/images/...` path, or points at a file that is not on disk. Use it first when "a picture is missing".
 - **Back up uploaded pictures before every deploy:** `npm run images:backup` writes `~/images-backup-YYYY-MM-DD.tar.gz` (outside the app folder; `-- --out DIR` to choose another). Download it. After a deploy, if pictures are missing: `npm run images:restore -- <file>` (never overwrites files already there). Pictures uploaded while the site runs live only on the server's disk, so a deploy that replaces the app folder or rebuilds from git would lose them without this.

@@ -19,10 +19,11 @@ export function useBooks() {
    * Uploads a book cover image (or triggers the server's placeholder
    * fallback if `file` is null) and returns the resulting img_url.
    */
-  const uploadBookCover = useCallback(async (title, file, theme) => {
+  const uploadBookCover = useCallback(async (title, file, theme, currentUrl) => {
     const formData = new FormData();
     formData.append('title', title);
     if (theme) formData.append('theme', theme);
+    if (currentUrl) formData.append('current_img_url', currentUrl);
     if (file)  formData.append('image', file);
     const data = await postFormData('/communitylibrary/upload/book', formData);
     return data?.img_url || null;

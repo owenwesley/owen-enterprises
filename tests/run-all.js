@@ -36,6 +36,7 @@ const SUITES = [
   { name: 'mfa',       file: 'mfa.js',                     server: 'hipaa' },
   { name: 'twilio',    file: 'twilio-request.js',          server: null },
   { name: 'hardening', file: 'hardening.js',               server: null },
+  { name: 'images',    file: 'image-layout.js',            server: null },
 ];
 const only = process.argv.slice(2);
 const todo = only.length ? SUITES.filter((s) => only.includes(s.name)) : SUITES;

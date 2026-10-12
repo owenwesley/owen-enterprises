@@ -2,8 +2,8 @@
  * scripts/copyImages.js   (run by hand: npm run images:copy)
  *
  * Copies the older pictures from the project's root images/ folder into client/public/images/:
- *   images/books/**   -> client/public/images/books/**
- *   images/movies/**  -> client/public/images/movies/**   (keeps the <media> sub-folders: dvd, blu-ray, ...)
+ *   images/books/**   -> client/public/images/communitylibrary/books/**
+ *   images/movies/**  -> client/public/images/communitylibrary/movies/**   (keeps the <media> sub-folders: dvd, blu-ray, ...)
  *
  * Never overwrites a file that is already there, never deletes anything, and prints a count of
  * copied / already-there / failed files so you can compare before removing the old folders.
@@ -15,7 +15,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const DRY = process.argv.includes('--dry');
-const PAIRS = ['books', 'movies'].map((n) => [path.join(ROOT, 'images', n), path.join(ROOT, 'client', 'public', 'images', n)]);
+const PAIRS = ['books', 'movies'].map((n) => [path.join(ROOT, 'images', n), path.join(ROOT, 'client', 'public', 'images', 'communitylibrary', n)]);
 
 let copied = 0, there = 0, failed = 0;
 

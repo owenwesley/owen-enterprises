@@ -557,7 +557,7 @@ export default function MoviesPage() {
     for (const [slot, file] of Object.entries(files)) {
       if (Number(slot) > filmCount(m)) continue;
       const label = m[`name${slot}`] || `film ${slot}`;
-      const url = await uploadMoviePoster(`${m.name} ${label}`, m[`media${slot}`] || 'dvd', file, null);
+      const url = await uploadMoviePoster(`${m.name} ${label}`, m[`media${slot}`] || 'dvd', file, null, m[`img${slot}`]);
       if (url) out[`img${slot}`] = url;
     }
     return out;
@@ -568,7 +568,7 @@ export default function MoviesPage() {
     // Only upload when a new file was chosen or the movie has no picture yet:
     // an upload with no file overwrites the stored picture with the placeholder.
     const imgUrl = (editFile || !m.img_url)
-      ? await uploadMoviePoster(m.name, m.media1 || 'dvd', editFile, null)
+      ? await uploadMoviePoster(m.name, m.media1 || 'dvd', editFile, null, m.img_url)
       : null;
     m = await withFilmPictures(m, editFilmFiles);
     const err = await saveMovie({ ...m, img_url: imgUrl || m.img_url });
@@ -607,7 +607,7 @@ export default function MoviesPage() {
     m[`who${f.slot}`]    = f.io === 'Out' ? f.who : 'In Library';
     m[`img${f.slot}`]    = f.img;
     if (file) {
-      const url = await uploadMoviePoster(`${m.name} ${f.name || `film ${f.slot}`}`, f.media || 'dvd', file, null);
+      const url = await uploadMoviePoster(`${m.name} ${f.name || `film ${f.slot}`}`, f.media || 'dvd', file, null, f.img);
       if (url) m[`img${f.slot}`] = url;
     }
     const err = await saveMovie(m);

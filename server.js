@@ -158,12 +158,23 @@ app.use('/admin',                    auth, require('./routes/admin'));
 app.use('/patient-doctors',          auth, require('./routes/patientDoctors'));
 
 // ── Static / SPA ──────────────────────────────────────────────────────────────
-// Serve book covers / movie posters saved by the upload controller
-// Book covers and movie posters are saved in client/public/images/books/ and
-// client/public/images/movies/<media>/ (see controllers/mediaUploadController.js), so that folder
-// is served first; the older root images/ folder (placeholders, older covers and posters) is the
-// fallback. Both give /images/... URLs.
-app.use('/images', express.static(path.join(__dirname, 'client', 'public', 'images')));
+// Serve book covers / movie posters saved by the upload controller.
+// Pictures are saved in client/public/images/communitylibrary/books/ and
+// client/public/images/communitylibrary/movies/<media>/ (see controllers/mediaUploadController.js and
+// utils/imageLayout.js; client/public/images/bgtracker/ is reserved for BG Tracker). That folder is
+// served first; the older root images/ folder (placeholders, older covers and posters) is the fallback.
+// Both give /images/... URLs.
+const IMAGES_DIR = path.join(__dirname, 'client', 'public', 'images');
+const serveImages = express.static(IMAGES_DIR);
+// legacyAlias: database rows from before 1.12.3 still say /images/books/x.webp or /images/movies/<media>/x.webp.
+// Answer those from communitylibrary/ when the file is there (otherwise fall through to the old folders).
+app.use('/images', (req, res, next) => {
+  if (!/^\/(books|movies)\//.test(req.url)) return next();
+  const original = req.url;
+  req.url = '/communitylibrary' + original;
+  serveImages(req, res, (err) => { req.url = original; next(err); });
+});
+app.use('/images', serveImages);
 app.use('/images', express.static(path.join(__dirname, 'images')));
 app.use(express.static(path.join(__dirname, './public')));
 
