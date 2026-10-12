@@ -28,8 +28,19 @@ const app  = express();
 // real visitor address behind a proxy - see middleware/rateLimits.js).
 if (require('./middleware/forceHttps').isOn()) app.set('trust proxy', 1);
 if (process.env.TRUST_PROXY) {
-  const hops = parseInt(process.env.TRUST_PROXY, 10);
-  app.set('trust proxy', Number.isFinite(hops) ? hops : process.env.TRUST_PROXY);
+  // A number = hops (normal). Words people naturally type are understood too: true/on/yes mean 1
+  // hop (never Express's bare `true`, which would trust a forged X-Forwarded-For), false/off/no/0
+  // mean no proxy. Anything else is passed to Express as an address list (e.g. "loopback").
+  const raw = String(process.env.TRUST_PROXY).trim();
+  const hops = parseInt(raw, 10);
+  let value = raw;
+  if (/^(true|on|yes)$/i.test(raw)) value = 1;
+  else if (/^(false|off|no)$/i.test(raw)) value = false;
+  else if (/^\d+$/.test(raw) && Number.isFinite(hops)) value = hops;
+  if (value !== false && value !== 0) {
+    try { app.set('trust proxy', value); }
+    catch (e) { console.error(`  ✗ TRUST_PROXY="${raw}" is not a hop count or address list (${e.message}); ignoring it. Use TRUST_PROXY=1.`); }
+  }
 }
 app.use(require('./middleware/forceHttps'));
 

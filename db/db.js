@@ -203,9 +203,9 @@ const TABLES = {
         user_id    INT          NOT NULL,
         tokenHash  CHAR(64)     NOT NULL,
         label      VARCHAR(120) NOT NULL DEFAULT '',
-        createdAt  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         expiresAt  DATETIME     NOT NULL,
         lastUsedAt DATETIME     NULL,
+        createdAt  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_device (tokenHash),
         KEY idx_device_user (user_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -640,11 +640,11 @@ const TABLES = {
         title        VARCHAR(255) NOT NULL,
         note         VARCHAR(500) NOT NULL DEFAULT '',
         status       ENUM('pending','accepted','declined','cancelled','expired') NOT NULL DEFAULT 'pending',
-        createdAt    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         answeredAt   TIMESTAMP NULL DEFAULT NULL,
         auto         TINYINT(1) NOT NULL DEFAULT 0,
         hideOwner    TINYINT(1) NOT NULL DEFAULT 0,
         hideRequester TINYINT(1) NOT NULL DEFAULT 0,
+        createdAt    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         KEY idx_owner (user_id, status),
         KEY idx_requester (requester_id, status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,

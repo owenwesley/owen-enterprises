@@ -1,11 +1,12 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.12.0",
+  "version": "1.12.2",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "server": "nodemon server.js",
     "client": "npm run dev --prefix client",
+    "db:timestamps": "node db/maintenance/moveTimestampsLast.js",
     "images:copy": "node scripts/copyImages.js",
     "check": "node tests/run-all.js",
     "check:church": "node tests/church-role-matrix.js",

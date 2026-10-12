@@ -11,12 +11,16 @@
  *   table present, column(s) missing → ALTER TABLE ... ADD COLUMN  (here)
  *   table present, all columns there → nothing happens
  *
+ * A new column is added in front of createdAt / updatedAt when the table has them
+ * (those two stay last; see db/maintenance/moveTimestampsLast.js for older tables).
+ *
  * Scope, on purpose: it only ADDS missing columns. It never drops, renames or
  * re-types a column, and never touches data — existing rows just get the new
  * column's default. Indexes / foreign keys in a definition are only applied
  * when the table is first created.
  */
 
+const STAMP_RE = /^(createdAt|updatedAt)$/i;
 const CONSTRAINT_RE = /^(PRIMARY|FOREIGN|UNIQUE|KEY|INDEX|CONSTRAINT|CHECK|FULLTEXT|SPATIAL)\b/i;
 
 /** Split on commas that are not inside (...) or a quoted string. */
@@ -82,7 +86,7 @@ async function syncColumns(conn, dbName, table, createSql) {
     const wanted = parseColumns(createSql);
     const [rows] = await conn.query(
       `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`,
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
       [dbName, table]
     );
     const have = new Set(rows.map((r) => r.COLUMN_NAME.toLowerCase())); // MySQL column names are case-insensitive
@@ -101,18 +105,35 @@ async function syncColumns(conn, dbName, table, createSql) {
       }
     }
 
+    // createdAt / updatedAt are kept at the END of the column list: new columns go in
+    // after the last ordinary column, i.e. in front of them (only when the table already
+    // has them last, which is the rule; otherwise new columns simply go at the end).
+    const live = rows.map((r) => r.COLUMN_NAME);
+    const firstStamp = live.findIndex((n) => STAMP_RE.test(n));
+    const stampsAreLast = firstStamp > 0 && live.slice(firstStamp).every((n) => STAMP_RE.test(n));
+    // MySQL / MariaDB can only say AFTER <column> (there is no BEFORE).
+    const placeAfter = (prev) => (prev ? ` AFTER \`${prev}\`` : '');
+    const startPrev = stampsAreLast ? live[firstStamp - 1] : null;
+
     const added = [];
     if (addable.length) {
-      const clauses = addable.map((c) => `ADD COLUMN \`${c.name}\` ${c.ddl}`);
+      let prev = startPrev;
+      const clauses = addable.map((c) => {
+        const clause = `ADD COLUMN \`${c.name}\` ${c.ddl}${placeAfter(prev)}`;
+        if (prev) prev = c.name;
+        return clause;
+      });
       try {
         await conn.query(`ALTER TABLE \`${dbName}\`.\`${table}\` ${clauses.join(', ')}`);
         added.push(...addable.map((c) => c.name));
       } catch {
         // One bad column shouldn't block the rest: retry individually.
+        prev = startPrev;
         for (const c of addable) {
           try {
-            await conn.query(`ALTER TABLE \`${dbName}\`.\`${table}\` ADD COLUMN \`${c.name}\` ${c.ddl}`);
+            await conn.query(`ALTER TABLE \`${dbName}\`.\`${table}\` ADD COLUMN \`${c.name}\` ${c.ddl}${placeAfter(prev)}`);
             added.push(c.name);
+            if (prev) prev = c.name;
           } catch (e) {
             failed.push({ name: c.name, reason: e.message });
           }

@@ -89,7 +89,7 @@ JWT_SECRET=a-long-random-string
 | `JWT_SECRET` | *insecure built-in fallback* | **Always set your own** (`npm run secret` prints one; changing it signs everyone out once). Tokens last 8 hours |
 | `CORS_ORIGIN` | *empty = any website may call the API* | **Set in production**: the exact address(es) people use, comma-separated |
 | `STRICT_SECURITY` | off | `on` (with `NODE_ENV=production`): refuse to start if `JWT_SECRET` is missing or under 32 characters or `CORS_ORIGIN` is empty |
-| `TRUST_PROXY` | unset | Number of reverse-proxy hops (usually `1`). Needed behind a proxy or the rate limits see one shared IP |
+| `TRUST_PROXY` | unset | Number of reverse-proxy hops (usually `1`; `true`/`on` also mean 1, `false`/`off` mean none). Needed behind a proxy or the rate limits see one shared IP |
 | `RATE_LIMIT_SIGNIN_MAX` / `_SIGNUP_` / `_MFA_` / `_BORROW_` / `_API_MAX` | 10 / 10 / 15 / 30 / 1200 | Rate-limit sizes (see `middleware/rateLimits.js`); `RATE_LIMIT=off` turns them all off (tests only) |
 | `HELMET_CSP` | on | `off` drops the Content-Security-Policy header if a deployment needs something it blocks |
 | `BORROW_EXPIRE_DAYS` | `21` | An unanswered borrow request closes itself after this many days |
@@ -402,6 +402,12 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.12.2** — `createdAt` / `updatedAt` are always the last columns of a table.
+- **Definitions:** in `db/init.js` and `db/db.js` every table with `createdAt` (and `updatedAt`, only `church.announcements` has one) now lists them last, createdAt first. Only two definitions needed changing: `borrow_requests` (createdAt was before answeredAt, auto, hideOwner, hideRequester) and `mfa_trusted_devices` (createdAt was before expiresAt, lastUsedAt).
+- **New columns stay in front of them:** `db/schemaSync.js` now adds a missing column right before `createdAt` / `updatedAt` instead of after them (MySQL has no BEFORE, so it uses `AFTER <the column before createdAt>`).
+- **Existing databases:** `npm run db:timestamps` (`db/maintenance/moveTimestampsLast.js`) reports which tables are out of order; `-- --apply` fixes them. Opt-in, never run at start-up. It only changes a column's position (the definition is re-used word for word from `SHOW CREATE TABLE`; values are untouched), rewrites each affected table, so back up the database and run it when the app is idle. Safe to run twice.
+- **Verified (MariaDB 10.11):** a database made by the 1.11.29 code reported exactly those two tables; `--apply` put them in order with every row's values identical and indexes intact; a second run did nothing; dropping two columns and restarting re-added them in front of `createdAt`. Nothing in the app reads these tables by column position (all `SELECT *` results are used by name).
 
 **1.12.0** — Hospitals, and a doctor can work at more than one place.
 - **Type:** `clinics.type` (`clinic` | `hospital`, default `clinic`; column added to existing databases by the normal start-up sync). Admin add / edit forms have a type picker; the doctor's browse page has an All / Clinics / Hospitals filter; places are labelled everywhere.
