@@ -7,13 +7,13 @@ const { serverError } = require('../utils/serverError');
  * expects the patient's id as req.params.patientId.
  *
  * `column` is the doctor_patients sharing column for this data type
- * (shareBP, shareWeight, shareReadings, shareMedications). The link must be
+ * (shareBP, shareWeight, shareReadings, shareMedications, sharePhotos). The link must be
  * 'active' AND that specific column must be 1 — a patient can share blood
  * pressure with one doctor and nothing else with another.
  *
  * Column names come only from the fixed list below, never from request input.
  */
-const ALLOWED_COLUMNS = new Set(['shareBP', 'shareWeight', 'shareReadings', 'shareMedications']);
+const ALLOWED_COLUMNS = new Set(['shareBP', 'shareWeight', 'shareReadings', 'shareMedications', 'sharePhotos']);
 
 function requirePatientAccess(column) {
   if (!ALLOWED_COLUMNS.has(column)) {

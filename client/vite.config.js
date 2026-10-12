@@ -17,6 +17,7 @@ const API_PREFIXES = [
   '/doctor',
   '/admin',
   '/patient-doctors',
+  '/patient-photos',
   '/owenenterprises',
   '/images',
 ];

@@ -379,6 +379,7 @@ Everything here is **off until you set it in `.env`**, so installing the release
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Twilio console > Account info |
 | `TWILIO_VERIFY_SERVICE_SID` | Twilio console > Verify > Services > create one (starts `VA`) |
 | `MFA_KEY` | long random string; encrypts phone numbers and old authenticator secrets. Set once and keep it |
+| `PATIENT_PHOTOS=on` | turn on patient photos (see 1.13.0). `PHOTO_DIR` (optional) = where the files are kept, `PHOTO_MAX_PER_PATIENT` (optional, default 200) |
 | `FORCE_HTTPS=on` | see above |
 | `MFA_SMS_PROVIDER=mock` | **tests only**: no text is sent and the code is always 123456. Never on a real site |
 
@@ -404,11 +405,22 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.13.0** — patient photos (a leg, an arm, a sore, a rash), shared with doctors who can add notes. Off unless `PATIENT_PHOTOS=on`.
+- **Where the files live:** NOT in `client/public`. `PHOTO_DIR` (default: a `patient-photos` folder in the folder above the app, e.g. `/var/www/vhosts/owen-enterprises.net/patient-photos`, next to the `.env`). Nothing serves that folder statically; a picture is only ever sent by an authenticated route.
+- **Files:** random 32-character names (never the patient id or name). Every upload is re-encoded by sharp into a 1600 px WebP plus a 320 px thumbnail; all metadata (EXIF, GPS position, phone model) is dropped and the picture is turned upright. Up to 200 photos per patient (`PHOTO_MAX_PER_PATIENT`), 12 MB per upload.
+- **Patient:** menu > My photos (patients with BG Tracker on). Take or choose a photo (phone camera opens directly), optional body area and note. A photo starts PRIVATE; sharing is per photo ("Share") AND per doctor (My doctors > Photos switch, `doctor_patients.sharePhotos`). Delete removes the files and the notes. Deleting an account removes its photo files.
+- **Doctor:** a patient's page shows a Photos section only for shared photos of a patient with an active link and Photos switched on. A doctor can add notes (the patient sees them) and delete only their own notes. Every look and every note is written to `audit_log` (with `HIPAA_GATE=on` the gate writes it; if the log write fails no picture is sent).
+- **Tables:** `patient_photos`, `patient_photo_notes`, `doctor_patients.sharePhotos` (created / added at start-up).
+- **Not built:** automatic deletion after N years (decide with the lawyer), photo backups (copy the `patient-photos` folder with your database backup), doctor-uploaded photos.
+- **Before turning it on for real patients:** HTTPS must load by itself and `FORCE_HTTPS=on`; legal review of retention and access; back up the photo folder.
+- **Tests:** `npm run check:photos` (69 checks); full `npm run check` = 15 suites, 644 checks.
+
 **1.12.3** — pictures are grouped by app: `communitylibrary/` (books, movies) and `bgtracker/`.
 - **New layout** under `client/public/images/`: `communitylibrary/books/`, `communitylibrary/movies/<dvd|blu-ray|vhs|hd-dvd|other>/`, `bgtracker/` (empty, reserved; BG Tracker has no pictures yet), `placeholders/` (unchanged, shared). URLs are `/images/communitylibrary/books/<name>.webp` and `/images/communitylibrary/movies/<media>/<name>.webp`. The path helper is `utils/imageLayout.js`.
 - **Upgrade (existing install):** back up the DATABASE and the pictures (`npm run images:backup`), then `npm run images:migrate` (report only) and, if it looks right, `npm run images:migrate -- --apply`. It moves `client/public/images/books|movies` into `communitylibrary/` (never overwrites, never deletes a picture) and rewrites `books.img_url`, `movies.img_url`, `movies.img1..img12` from `/images/books/...` / `/images/movies/...` to the new URLs (one transaction per table; safe to run twice). Then `npm run images:copy` copies anything still in the old root `images/books|movies` into the new folders, and `npm run images:check` confirms every picture is found (it also counts rows still on the old paths).
 - **Old URLs keep working:** `server.js` answers `/images/books/...` and `/images/movies/...` from `communitylibrary/` first, then falls back to the old root `images/` folders, so nothing breaks between deploying 1.12.3 and running the migration.
 - **No more overwriting:** two items with the same title (and media type) used to share one file, so the second upload replaced the first's picture. Now a taken name gets `-2`, `-3`, ... The client sends `current_img_url` when it re-uploads a picture for an existing row, so that row's own file is replaced instead.
+- **Scripts and the database login:** `images:check` and `images:migrate` read `.env` in the app folder, else `.env` in the folder above it (outside the web root). Needed on IONOS/Plesk, whose panel variables are not passed to scripts started from the panel.
 - **Tests:** `npm run check:images` (14 checks, no server needed); `npm run check` is now 14 suites, 575 checks, all pass (MariaDB 10.11). Migration run end to end on a database in the old layout (report, `--apply`, second run, old and new URLs served, uploads with and without `current_img_url`); `vite build` OK. Not verified: MySQL 8, a browser, Windows.
 
 **1.12.2** — `createdAt` / `updatedAt` are always the last columns of a table.

@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
     const [results] = await db.promise().query(
       `SELECT dp.id, dp.doctor_id, u.firstName, u.lastName,
               COALESCE(p.specialty, '') AS specialty,
-              dp.status, dp.shareBP, dp.shareWeight, dp.shareReadings, dp.shareMedications
+              dp.status, dp.shareBP, dp.shareWeight, dp.shareReadings, dp.shareMedications, dp.sharePhotos
          FROM doctor_patients dp
          JOIN users u ON u.id = dp.doctor_id
          LEFT JOIN doctor_profiles p ON p.user_id = dp.doctor_id
@@ -69,11 +69,11 @@ router.post('/link', async (req, res) => {
   }
 });
 
-// POST /patient-doctors/:id/sharing  { shareBP?, shareWeight?, shareReadings?, shareMedications? }
+// POST /patient-doctors/:id/sharing  { shareBP?, shareWeight?, shareReadings?, shareMedications?, sharePhotos? }
 // Only the fields present in the body are changed; omitted ones keep their
 // current value (a partial toggle from the UI shouldn't reset the rest to 0).
 router.post('/:id/sharing', async (req, res) => {
-  const fields = ['shareBP', 'shareWeight', 'shareReadings', 'shareMedications'];
+  const fields = ['shareBP', 'shareWeight', 'shareReadings', 'shareMedications', 'sharePhotos'];
   const present = fields.filter((f) => Object.prototype.hasOwnProperty.call(req.body, f));
   if (present.length === 0) return res.status(400).json({ error: 'Nothing to update' });
 

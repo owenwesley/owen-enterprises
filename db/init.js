@@ -128,10 +128,50 @@ function tableMap(names) {
           shareWeight     TINYINT(1) NOT NULL DEFAULT 1,
           shareReadings   TINYINT(1) NOT NULL DEFAULT 1,
           shareMedications TINYINT(1) NOT NULL DEFAULT 1,
+          sharePhotos     TINYINT(1) NOT NULL DEFAULT 1,
           createdAt     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uq_doctor_patient (doctor_id, patient_id),
           FOREIGN KEY (doctor_id)  REFERENCES users(id) ON DELETE CASCADE,
           FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+        // Patient photos (1.13.0, behind PATIENT_PHOTOS=on): a picture of a leg, arm,
+        // sore or rash the patient took on a phone. The picture itself is a file in
+        // PHOTO_DIR (outside the web root, never served statically); fileKey is its
+        // random name. A photo is private until the patient sets shared=1, and even
+        // then only a doctor with an active link AND doctor_patients.sharePhotos=1
+        // can see it. Column is patient_id so deleteUser.js / the weekly rebuild
+        // (db/maintenance/idRefs.js) handle it like every other patient table.
+        name: 'patient_photos',
+        sql: `CREATE TABLE IF NOT EXISTS patient_photos (
+          id          INT AUTO_INCREMENT PRIMARY KEY,
+          patient_id  INT          NOT NULL,
+          fileKey     CHAR(32)     NOT NULL,
+          bodyArea    VARCHAR(60)  NOT NULL DEFAULT '',
+          note        VARCHAR(500) NOT NULL DEFAULT '',
+          takenOn     DATE         NOT NULL,
+          shared      TINYINT(1)   NOT NULL DEFAULT 0,
+          createdAt   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_photo_file (fileKey),
+          KEY idx_photo_patient (patient_id, takenOn),
+          FOREIGN KEY (patient_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
+        // A doctor's note on a shared photo. Written by doctor_id (not "author_id") so the
+        // weekly id renumbering and deleteUser.js, which know doctor_id, keep it correct.
+        // Deleting the photo deletes its notes.
+        name: 'patient_photo_notes',
+        sql: `CREATE TABLE IF NOT EXISTS patient_photo_notes (
+          id         INT AUTO_INCREMENT PRIMARY KEY,
+          photo_id   INT          NOT NULL,
+          doctor_id  INT          NOT NULL,
+          body       VARCHAR(1000) NOT NULL,
+          createdAt  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          KEY idx_note_photo (photo_id, createdAt),
+          FOREIGN KEY (photo_id)  REFERENCES patient_photos(id) ON DELETE CASCADE,
+          FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {

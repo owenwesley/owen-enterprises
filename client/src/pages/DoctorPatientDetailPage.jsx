@@ -12,6 +12,8 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getFetch } from '../utils/api';
+import DoctorPhotosSection from '../components/DoctorPhotosSection';
+import { useAppContext } from '../context/AppContext';
 import { BPChart, WeightChart } from '../features/bgtracker/components/Charts';
 import { BPChartData, getLabels } from '../features/bgtracker/utils/chartData';
 
@@ -112,6 +114,9 @@ export default function DoctorPatientDetailPage() {
   const [bloodpressures, setBloodpressures] = useState(null);
   const [medications, setMedications] = useState(null);
   const [error, setError] = useState('');
+  const [photosOn, setPhotosOn] = useState(false);
+  const { state } = useAppContext();
+  const user = state.user;
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +127,8 @@ export default function DoctorPatientDetailPage() {
       const found = list.results.find((p) => String(p.patient_id) === String(patientId));
       if (!found) { setError('This patient is not linked to you (or the link was revoked).'); return; }
       setPatient(found);
+      const en = await getFetch('/patient-photos/enabled');
+      if (!cancelled) setPhotosOn(Boolean(en && en.enabled));
 
       if (found.shareWeight) {
         const w = await getFetch(`/doctor/patients/${patientId}/weights`);
@@ -200,6 +207,14 @@ export default function DoctorPatientDetailPage() {
               </TableContainer>
             ) : (
               <Typography sx={sxStyles.meta}>No medications on record.</Typography>
+            )}
+            {photosOn && (
+              <>
+                <Typography sx={sxStyles.section}>Photos</Typography>
+                {patient.sharePhotos
+                  ? <DoctorPhotosSection patientId={patientId} myId={user && user.id} />
+                  : <Typography sx={sxStyles.notShared}>Not shared by this patient.</Typography>}
+              </>
             )}
           </>
         )}

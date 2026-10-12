@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * tests/run-all.js   (npm run check)   - 1.12.0
+ * tests/run-all.js   (npm run check)   - 1.13.0
  *
  * Runs EVERY automated check in one go and prints one summary line per suite. It starts its own copies of
  * the server on ports 4110 / 4111 (so the server you normally run is left alone, and no rate limits or
  * weekly maintenance get in the way), runs the suites, then stops them. Uses the database in your .env;
  * the suites only create and remove throwaway test_* users and churches.
  *
- *   server on :4110  HIPAA gate off, rate limits off   -> check, church 1-7, clinics
+ *   server on :4110  HIPAA gate off, rate limits off   -> check, church 1-7, clinics, photos
  *   server on :4111  HIPAA gate on, text messages mocked -> hipaa, mfa
  *   no server        -> twilio (local fake), hardening (starts its own)
  *
@@ -18,6 +18,7 @@
  * Exit code 0 = every suite passed.
  */
 const path = require('path');
+const os = require('os');
 const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 const root = path.resolve(__dirname, '..');
@@ -37,13 +38,16 @@ const SUITES = [
   { name: 'twilio',    file: 'twilio-request.js',          server: null },
   { name: 'hardening', file: 'hardening.js',               server: null },
   { name: 'images',    file: 'image-layout.js',            server: null },
+  { name: 'photos',    file: 'patient-photos.js',          server: 'plain' },
 ];
 const only = process.argv.slice(2);
 const todo = only.length ? SUITES.filter((s) => only.includes(s.name)) : SUITES;
 if (!todo.length) { console.error('No such suite. Names: ' + SUITES.map((s) => s.name).join(', ')); process.exit(2); }
 
+// Patient photos are switched on for the test servers, into a throwaway folder (never the real PHOTO_DIR).
+const PHOTO_TEST_DIR = path.join(os.tmpdir(), 'oe-photos-test');
 const SERVERS = {
-  plain: { port: 4110, env: { HIPAA_GATE: 'off', RATE_LIMIT: 'off', MAINTENANCE_REBUILD_ENABLED: 'false' } },
+  plain: { port: 4110, env: { HIPAA_GATE: 'off', RATE_LIMIT: 'off', MAINTENANCE_REBUILD_ENABLED: 'false', PATIENT_PHOTOS: 'on', PHOTO_DIR: PHOTO_TEST_DIR } },
   hipaa: { port: 4111, env: { HIPAA_GATE: 'on', MFA_SMS_PROVIDER: 'mock', RATE_LIMIT: 'off', MAINTENANCE_REBUILD_ENABLED: 'false' } },
 };
 const running = {};
@@ -62,7 +66,7 @@ function startServer(kind) {
 }
 function runSuite(s, base) {
   return new Promise((resolve) => {
-    const env = { ...process.env, RATE_LIMIT: 'off' };
+    const env = { ...process.env, RATE_LIMIT: 'off', PHOTO_DIR: PHOTO_TEST_DIR };
     if (base) env.BASE_URL = base;
     if (s.server === 'hipaa' && s.name === 'mfa') env.MFA_SMS_PROVIDER = 'mock';
     const child = spawn(process.execPath, [path.join('tests', s.file)], { cwd: root, env });

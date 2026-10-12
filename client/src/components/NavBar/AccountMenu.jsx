@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useHistory } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
@@ -20,6 +20,8 @@ import BusinessIcon from '@mui/icons-material/Business';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import { getFetch } from '../../utils/api';
 
 import { useAppContext } from '../../context/AppContext';
 import DeleteAccountDialog from './DeleteAccountDialog';
@@ -44,6 +46,12 @@ export default function AccountMenu({ compact = false }) {
   const history = useHistory();
   const [anchor, setAnchor] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [photosOn, setPhotosOn] = useState(false);
+  // Patient photos exist only when the server has PATIENT_PHOTOS=on; ask once per sign-in.
+  useEffect(() => {
+    if (user.role !== 'patient') return;
+    getFetch('/patient-photos/enabled').then((r) => setPhotosOn(Boolean(r && r.enabled)));
+  }, [user.role]);
 
   const close = () => setAnchor(null);
   const initials = `${(user.firstName || '?')[0]}${(user.lastName || '')[0] || ''}`.toUpperCase();
@@ -103,6 +111,7 @@ export default function AccountMenu({ compact = false }) {
         {linkItem('/security', <SettingsIcon fontSize="small" />, 'Two-step sign-in')}
         {isPatient && featurePreferences.chkBgtracker === 1 &&
           linkItem('/my-doctors', <LocalHospitalIcon fontSize="small" />, 'My doctors')}
+        {isPatient && photosOn && featurePreferences.chkBgtracker === 1 && linkItem('/my-photos', <PhotoCameraIcon fontSize="small" />, 'My photos')}
         {user.role === 'doctor' && linkItem('/doctor', <DashboardIcon fontSize="small" />, 'Doctor home')}
         {user.role === 'doctor' && linkItem('/doctor/clinic', <BusinessIcon fontSize="small" />, 'Where I work')}
         {user.role === 'admin' && linkItem('/admin', <FactCheckIcon fontSize="small" />, 'Doctor approvals')}

@@ -112,3 +112,20 @@ export async function postFormData(url, formData) {
     return null;
   }
 }
+
+/**
+ * GET a protected picture and return a temporary object URL for <img src>. Pictures are never
+ * served from a public folder: they need the sign-in header, which an <img src="/..."> cannot send,
+ * so the page fetches the bytes itself. Returns null when it could not be loaded.
+ * (The caller should URL.revokeObjectURL() the result when done; see components/AuthImage.jsx.)
+ */
+export async function getBlobUrl(url) {
+  try {
+    const token = _getToken() || storedToken();
+    const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    return URL.createObjectURL(await res.blob());
+  } catch {
+    return null;
+  }
+}

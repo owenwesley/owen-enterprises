@@ -12,6 +12,8 @@ const {
 } = require('../db/sql/owenenterprises/clinics');
 const { listForDoctor, MAX_PLACES_PER_DOCTOR } = require('../utils/doctorClinics');
 const { serverError } = require('../utils/serverError');
+const photosApi = require('./patientPhotos');
+const P = require('../utils/patientPhotos');
 
 const router = express.Router();
 
@@ -48,7 +50,7 @@ router.get('/patients', requireApprovedDoctor, async (req, res) => {
   try {
     const [results] = await db.promise().query(
       `SELECT dp.id, dp.patient_id, u.firstName, u.lastName,
-              dp.shareBP, dp.shareWeight, dp.shareReadings, dp.shareMedications
+              dp.shareBP, dp.shareWeight, dp.shareReadings, dp.shareMedications, dp.sharePhotos
          FROM doctor_patients dp
          JOIN users u ON u.id = dp.patient_id
         WHERE dp.doctor_id = ? AND dp.status = 'active'
@@ -116,6 +118,79 @@ router.get('/patients/:patientId/medications',
       return serverError(res, e);
     }
   });
+
+// ── Patient photos (1.13.0, only when PATIENT_PHOTOS=on) ─────────────────────
+// A doctor sees a photo only when ALL of these hold: approved doctor, active link,
+// doctor_patients.sharePhotos = 1, and that photo's own shared = 1. The photo id in the URL is
+// always re-checked against :patientId, so changing the ids in the address reaches nothing else.
+// Every look at a picture and every note is written to audit_log (see photosApi.audit).
+const photoGuard = [requireApprovedDoctor, photosApi.requireEnabled, requirePatientAccess('sharePhotos'), hipaaGate({ subject: 'patient' })];
+const isId = (v) => /^[0-9]+$/.test(String(v));
+
+async function sharedPhoto(patientId, photoId) {
+  const [rows] = await db.promise().query(
+    'SELECT id, fileKey FROM patient_photos WHERE id=? AND patient_id=? AND shared=1', [photoId, patientId]);
+  return rows[0] || null;
+}
+
+router.get('/patients/:patientId/photos', ...photoGuard, async (req, res) => {
+  try {
+    await photosApi.audit(req, Number(req.params.patientId), 'photo list');
+    const [rows] = await db.promise().query(
+      `SELECT ${photosApi.PHOTO_COLS} FROM patient_photos WHERE patient_id=? AND shared=1 ORDER BY takenOn DESC, id DESC`,
+      [req.params.patientId]
+    );
+    return res.json({ results: await photosApi.withNotes(rows) });
+  } catch (e) {
+    return serverError(res, e);
+  }
+});
+
+router.get('/patients/:patientId/photos/:photoId/file', ...photoGuard, async (req, res) => {
+  if (!isId(req.params.photoId)) return res.status(404).json({ error: 'Not found' });
+  try {
+    const photo = await sharedPhoto(req.params.patientId, req.params.photoId);
+    if (!photo) return res.status(404).json({ error: 'Not found' });
+    await photosApi.audit(req, Number(req.params.patientId), `photo ${photo.id}`);
+    return await P.sendPhoto(res, photo.fileKey, req.query.size === 'thumb' ? 'thumb' : 'full');
+  } catch (e) {
+    return serverError(res, e);
+  }
+});
+
+// POST /doctor/patients/:patientId/photos/:photoId/notes { body }
+router.post('/patients/:patientId/photos/:photoId/notes', ...photoGuard, async (req, res) => {
+  if (!isId(req.params.photoId)) return res.status(404).json({ error: 'Not found' });
+  const body = P.cleanText(req.body && req.body.body, 1000);
+  if (!body) return res.status(400).json({ error: 'Write a note first.' });
+  try {
+    const photo = await sharedPhoto(req.params.patientId, req.params.photoId);
+    if (!photo) return res.status(404).json({ error: 'Not found' });
+    await photosApi.audit(req, Number(req.params.patientId), `note on photo ${photo.id}`);
+    const [r] = await db.promise().query(
+      'INSERT INTO patient_photo_notes (photo_id, doctor_id, body) VALUES (?,?,?)', [photo.id, req.doctor.id, body]);
+    return res.status(201).json({ message: 'Note added', id: r.insertId });
+  } catch (e) {
+    return serverError(res, e);
+  }
+});
+
+// DELETE /doctor/patients/:patientId/photos/:photoId/notes/:noteId — a doctor removes only their own note
+router.delete('/patients/:patientId/photos/:photoId/notes/:noteId', ...photoGuard, async (req, res) => {
+  if (!isId(req.params.photoId) || !isId(req.params.noteId)) return res.status(404).json({ error: 'Not found' });
+  try {
+    const photo = await sharedPhoto(req.params.patientId, req.params.photoId);
+    if (!photo) return res.status(404).json({ error: 'Not found' });
+    await photosApi.audit(req, Number(req.params.patientId), `delete note on photo ${photo.id}`);
+    const [r] = await db.promise().query(
+      'DELETE FROM patient_photo_notes WHERE id=? AND photo_id=? AND doctor_id=?',
+      [req.params.noteId, photo.id, req.doctor.id]);
+    if (r.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
+    return res.json({ message: 'Note deleted' });
+  } catch (e) {
+    return serverError(res, e);
+  }
+});
 
 // ── Clinic / hospital browse + self-service add or remove requests ──────────
 // Available to a doctor even while still 'pending' approval (requireDoctor,

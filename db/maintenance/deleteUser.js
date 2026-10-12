@@ -81,6 +81,15 @@ async function main(userName, apply, log = console.log) {
         bad.map((b) => `${b.schema}.${b.table}`).join(', '));
     }
 
+    // Patient photo files are not in the database; collect their names now, delete the files after the commit.
+    let photoKeys = [];
+    try {
+      const [pk] = await conn.query(`SELECT fileKey FROM ${qt(gateway, 'patient_photos')} WHERE patient_id = ?`, [u.id]);
+      photoKeys = pk.map((r) => r.fileKey);
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
+    }
+
     await conn.beginTransaction();
     try {
       for (const p of plan) {
@@ -92,6 +101,11 @@ async function main(userName, apply, log = console.log) {
     } catch (e) {
       await conn.rollback();
       throw e;
+    }
+    if (photoKeys.length) {
+      const { removeFiles } = require('../../utils/patientPhotos');
+      for (const k of photoKeys) await removeFiles(k);
+      log(`  removed ${photoKeys.length} patient photo file(s)`);
     }
     log(`\nDeleted user ${u.userName} and all of their data.`);
     return { deleted: true, userId: u.id, rows: plan };

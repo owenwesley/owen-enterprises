@@ -153,6 +153,12 @@ app.use('/doctor',                   auth, require('./routes/doctor'));
 // Admin routes do their own role check too (middleware/admin.js). There is no
 // self-serve way to become an admin — see db/makeAdmin.js.
 app.use('/admin',                    auth, require('./routes/admin'));
+// Patient photos (1.13.0): off unless PATIENT_PHOTOS=on. Files live outside the web root and are
+// only ever sent by these authenticated routes (doctors reach shared ones through /doctor/...).
+// /enabled is mounted first so the page can ask whether the feature is on without the HIPAA gate.
+const patientPhotos = require('./routes/patientPhotos');
+app.get('/patient-photos/enabled', auth, patientPhotos.enabledHandler);
+app.use('/patient-photos',           auth, patientPhotos.requireEnabled, hipaaGate(), patientPhotos.router);
 // Patient-side "My Doctors": every route here scopes to req.user.id itself
 // (see routes/patientDoctors.js), so it doesn't go through ownerOnly either.
 app.use('/patient-doctors',          auth, require('./routes/patientDoctors'));

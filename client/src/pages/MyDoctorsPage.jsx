@@ -48,6 +48,8 @@ const SHARE_LABELS = [
   ['shareReadings', 'Blood glucose readings'],
   ['shareMedications', 'Medications'],
 ];
+// Shown only when the server has patient photos switched on (PATIENT_PHOTOS=on).
+const PHOTOS_LABEL = ['sharePhotos', 'Photos (the ones you choose to share)'];
 
 export default function MyDoctorsPage() {
   const [doctors, setDoctors] = useState(null);
@@ -56,6 +58,7 @@ export default function MyDoctorsPage() {
   const [linkError, setLinkError] = useState('');
   const [linking, setLinking] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [photosOn, setPhotosOn] = useState(false);
 
   const load = useCallback(async () => {
     const data = await getFetch('/patient-doctors');
@@ -66,6 +69,7 @@ export default function MyDoctorsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { getFetch('/patient-photos/enabled').then((r) => setPhotosOn(Boolean(r && r.enabled))); }, []);
 
   const onLink = async () => {
     const trimmed = code.trim();
@@ -148,7 +152,7 @@ export default function MyDoctorsPage() {
             {d.status === 'active' ? (
               <>
                 <Box sx={sxStyles.switchesRow}>
-                  {SHARE_LABELS.map(([field, label]) => (
+                  {(photosOn ? [...SHARE_LABELS, PHOTOS_LABEL] : SHARE_LABELS).map(([field, label]) => (
                     <FormControlLabel
                       key={field}
                       control={

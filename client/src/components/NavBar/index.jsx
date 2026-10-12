@@ -65,6 +65,7 @@ const DoctorClinicPage = lazyPage(() => import('../../pages/DoctorClinicPage'));
 const DoctorPatientDetailPage = lazyPage(() => import('../../pages/DoctorPatientDetailPage'));
 const AdminDoctorsPage = lazyPage(() => import('../../pages/AdminDoctorsPage'));
 const MyDoctorsPage = lazyPage(() => import('../../pages/MyDoctorsPage'));
+const PatientPhotosPage = lazyPage(() => import('../../pages/PatientPhotosPage'));
 const ReadingsPage = lazyPage(() => import('../../features/bgtracker/pages/ReadingsPage'));
 const NutritionPage = lazyPage(() => import('../../features/bgtracker/pages/NutritionPage'));
 // pages.jsx exports several named pages; lazy() needs a default export.
@@ -409,6 +410,10 @@ export default function NavBar() {
         {/* Patient-side: link to doctors and control what each one can see */}
         <Route path="/my-doctors">
           <AuthGate>{user.role === 'patient' ? <MyDoctorsPage /> : <Redirect to="/" />}</AuthGate>
+        </Route>
+
+        <Route path="/my-photos">
+          <AuthGate>{user.role === 'patient' ? <PatientPhotosPage /> : <Redirect to="/" />}</AuthGate>
         </Route>
 
         <Route path="/feature-preferences"><AuthGate><FeaturePreferencesPage /></AuthGate></Route>
