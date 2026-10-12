@@ -20,7 +20,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
+// Settings: a .env in the app folder, else one in the folder ABOVE the app folder (outside the web root;
+// handy on IONOS/Plesk, where the panel's variables are not passed to scripts). Values already set win.
+const ENV_FILES = [path.resolve(__dirname, '../.env'), path.resolve(__dirname, '../../.env')];
+for (const f of ENV_FILES) require('dotenv').config({ path: f, quiet: true });
 const mysql = require('mysql2/promise');
 const { toNewUrl, isLegacyUrl, LIB_FOLDER } = require('../utils/imageLayout');
 
@@ -104,6 +107,6 @@ async function migrateRows(db, table, cols) {
 })().catch((e) => {
   const why = e.message || (e.errors && e.errors.map((x) => x.message || x.code).join('; ')) || e.code || String(e);
   console.error('images:migrate failed:', why);
-  console.error('  (database host: ' + (process.env.DB_HOST || 'localhost') + ', user: ' + (process.env.DB_USER || '(none)') + ', .env found: ' + fs.existsSync(path.resolve(__dirname, '../.env')) + ')');
+  console.error('  (database host: ' + (process.env.DB_HOST || 'localhost') + ', user: ' + (process.env.DB_USER || '(none)') + ', .env found: ' + (ENV_FILES.filter((f) => fs.existsSync(f)).join(', ') || 'none') + ')');
   process.exit(2);
 });
