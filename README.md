@@ -405,6 +405,8 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.13.3** — the root `images/` folder is gone. The four placeholder pictures moved to `client/public/images/placeholders/` (served first; the server still reads a root `images/` folder as a fallback if one exists, so a live server that still has old pictures there keeps working). Doctor note field label shortened for phones.
+
 **1.13.2 (same entry as 1.13.1)** — photo upload no longer runs out of memory (Android reported "can't complete operation due to low memory").
 - **Phone:** `client/src/utils/shrinkImage.js` shrinks the camera picture in the browser to about 1600 px (a JPEG of a few hundred KB) before it is uploaded. If the browser cannot, the original is sent as before.
 - **Server:** `utils/patientPhotos.js` decodes the big picture once (the thumbnail is made from the small result), sharp uses one thread and no cache, and a picture over 60 megapixels is answered with a clear "too large" message (413) instead of "could not be read". Tested with a 48-megapixel picture: saved in under a second, peak process memory about 380 MB.

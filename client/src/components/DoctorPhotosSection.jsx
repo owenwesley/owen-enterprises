@@ -49,7 +49,7 @@ export default function DoctorPhotosSection({ patientId, myId }) {
               </Typography>
             ))}
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField size="small" fullWidth multiline label="Add a note (the patient can read it)"
+              <TextField size="small" fullWidth multiline label="Add a note" helperText="The patient can read it"
                 value={draft[p.id] || ''} inputProps={{ maxLength: 1000 }}
                 onChange={(e) => setDraft((d) => ({ ...d, [p.id]: e.target.value }))} />
               <Button variant="contained" size="small" onClick={() => addNote(p)}>Add</Button>
