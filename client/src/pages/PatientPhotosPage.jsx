@@ -15,6 +15,7 @@ import Divider from '@mui/material/Divider';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import { getFetch, putFetch, deleteFetch, postFormData, notifyError } from '../utils/api';
 import AuthImage from '../components/AuthImage';
+import shrinkImage from '../utils/shrinkImage';
 
 const sx = {
   wrapper: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: { xs: '16px 12px', sm: '24px' }, boxSizing: 'border-box', background: 'linear-gradient(135deg, #1a237e 0%, #283593 100%)' },
@@ -51,7 +52,7 @@ export default function PatientPhotosPage() {
     if (!file) return;
     setBusy(true);
     const form = new FormData();
-    form.append('image', file);
+    form.append('image', await shrinkImage(file));   // small upload: a full camera file can run a phone or server out of memory
     form.append('bodyArea', bodyArea);
     form.append('note', note);
     form.append('shared', share ? '1' : '0');

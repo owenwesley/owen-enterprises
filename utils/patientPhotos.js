@@ -25,6 +25,10 @@ const FULL_SIDE = 1600;
 const THUMB_SIDE = 320;
 const KEY_RE = /^[a-f0-9]{32}$/;
 
+// Keep libvips small: one worker thread, no operation cache (global for this process).
+sharp.cache(false);
+sharp.concurrency(1);
+
 const enabled = () => String(process.env.PATIENT_PHOTOS || '').trim().toLowerCase() === 'on';
 
 /** Max photos one patient may keep (disk protection). PHOTO_MAX_PER_PATIENT in the environment changes it. */
@@ -52,14 +56,20 @@ function filePath(fileKey, size = 'full') {
 async function saveImage(buffer) {
   let full; let thumb;
   try {
-    const base = () => sharp(buffer, { failOn: 'error', limitInputPixels: 60e6 }).rotate();
-    full = await base().resize(FULL_SIDE, FULL_SIDE, { fit: 'inside', withoutEnlargement: true })
+    // Memory-light on purpose (shared hosting has little RAM): the big picture is decoded ONCE,
+    // the thumbnail is made from the already-small result, and sharp works with one thread and no cache.
+    full = await sharp(buffer, { failOn: 'error', limitInputPixels: 60e6, sequentialRead: true }).rotate()
+      .resize(FULL_SIDE, FULL_SIDE, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 80 }).toBuffer();
-    thumb = await base().resize(THUMB_SIDE, THUMB_SIDE, { fit: 'inside', withoutEnlargement: true })
+    thumb = await sharp(full)
+      .resize(THUMB_SIDE, THUMB_SIDE, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 70 }).toBuffer();
   } catch (e) {
-    const err = new Error('That file could not be read as a picture. Please take or choose a photo.');
-    err.status = 400; err.expose = true;
+    const tooBig = /pixel limit|memory|alloc/i.test(String(e && e.message));
+    const err = new Error(tooBig
+      ? 'That picture is too large for the server to handle. Choose a smaller one or lower the camera resolution.'
+      : 'That file could not be read as a picture. Please take or choose a photo.');
+    err.status = tooBig ? 413 : 400; err.expose = true;
     throw err;
   }
   await fs.promises.mkdir(photoDir(), { recursive: true, mode: 0o700 });

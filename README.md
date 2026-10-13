@@ -405,6 +405,11 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.13.1** — photo upload no longer runs out of memory (Android reported "can't complete operation due to low memory").
+- **Phone:** `client/src/utils/shrinkImage.js` shrinks the camera picture in the browser to about 1600 px (a JPEG of a few hundred KB) before it is uploaded. If the browser cannot, the original is sent as before.
+- **Server:** `utils/patientPhotos.js` decodes the big picture once (the thumbnail is made from the small result), sharp uses one thread and no cache, and a picture over 60 megapixels is answered with a clear "too large" message (413) instead of "could not be read". Tested with a 48-megapixel picture: saved in under a second, peak process memory about 380 MB.
+- If the error still appears, note where: on the phone before the picture is sent, or as a message from the page after.
+
 **1.13.0** — patient photos (a leg, an arm, a sore, a rash), shared with doctors who can add notes. Off unless `PATIENT_PHOTOS=on`.
 - **Where the files live:** NOT in `client/public`. `PHOTO_DIR` (default: a `patient-photos` folder in the folder above the app, e.g. `/var/www/vhosts/owen-enterprises.net/patient-photos`, next to the `.env`). Nothing serves that folder statically; a picture is only ever sent by an authenticated route.
 - **Files:** random 32-character names (never the patient id or name). Every upload is re-encoded by sharp into a 1600 px WebP plus a 320 px thumbnail; all metadata (EXIF, GPS position, phone model) is dropped and the picture is turned upright. Up to 200 photos per patient (`PHOTO_MAX_PER_PATIENT`), 12 MB per upload.
