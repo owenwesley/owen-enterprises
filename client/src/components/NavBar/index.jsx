@@ -25,6 +25,8 @@ import { useChartData } from '../../features/bgtracker/hooks/useChartData';
 import { useReadings } from '../../features/bgtracker/hooks/useReadings';
 import { useChairs } from '../../features/meetings/hooks/useChairs';
 import { useMemos } from '../../features/meetings/hooks/useMemos';
+import { useMeetingReports } from '../../features/meetings/hooks/useMeetingReports';
+import MeetingLogo from '../../features/meetings/components/MeetingLogo';
 
 import AccountMenu from './AccountMenu';
 // Login, Register and Landing load with the app; every other page is loaded the
@@ -172,6 +174,16 @@ function HipaaRedirect() {
   return null;
 }
 
+// A nav link's text, with the meeting logo in front of it when the item asks for one (n.logo).
+function NavLabel({ n }) {
+  if (!n.logo) return n.label;
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+      <MeetingLogo size={20} />{n.label}
+    </Box>
+  );
+}
+
 function TopBar({ navItems }) {
   const { state, dispatch } = useAppContext();
   const { activeFeature } = state;
@@ -226,9 +238,9 @@ function TopBar({ navItems }) {
                   {navItems.map((n) => (
                     <Box key={n.to} component={Link} to={n.to} sx={sx.link}>
                       {n.badge > 0
-                        ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { right: -10 } }}
-                            aria-label={`${n.badge} borrow request(s) waiting`}>{n.label}</Badge>
-                        : n.label}
+                        ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none', ml: 0.75 } }}
+                            aria-label={`${n.badge} ${n.badgeLabel || 'borrow request(s) waiting'}`}><NavLabel n={n} /></Badge>
+                        : <NavLabel n={n} />}
                     </Box>
                   ))}
                 </Box>
@@ -272,9 +284,9 @@ function TopBar({ navItems }) {
                 selected={n.to === '/' ? pathname === '/' : pathname.startsWith(n.to)}
                 sx={{ minHeight: 48 }}>
                 <ListItemText primary={n.badge > 0
-                  ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { right: -14 } }}
-                      aria-label={`${n.badge} borrow request(s) waiting`}>{n.label}</Badge>
-                  : n.label} />
+                  ? <Badge badgeContent={n.badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none', ml: 1 } }}
+                      aria-label={`${n.badge} ${n.badgeLabel || 'borrow request(s) waiting'}`}><NavLabel n={n} /></Badge>
+                  : <NavLabel n={n} />} />
               </ListItemButton>
             ))}
           </List>
@@ -349,12 +361,13 @@ export default function NavBar() {
 
   const bgNav = buildBgNav(preference);
   const borrowBadge = useBorrowBadge();   // requests waiting for my answer
+  const reportBadge = useMeetingReports();   // meeting reports waiting to be printed / saved
 
   const navMap = {
     bgtracker: bgNav,
     communityLibrary: [{ to: '/books', label: '📚 Books', badge: borrowBadge.books }, { to: '/movies', label: '🎬 Movies', badge: borrowBadge.movies }, { to: '/contacts', label: '👤 Contacts' }],
     meetings: [
-      { to: '/meetings', label: '🤝 Meetings' },
+      { to: '/meetings', label: 'Meetings', logo: true, badge: reportBadge.count, badgeLabel: 'meeting report(s) to print or save' },
       { to: '/chairs', label: '👤 Chairs' },
       { to: '/memos', label: '📝 Memos' },
     ],

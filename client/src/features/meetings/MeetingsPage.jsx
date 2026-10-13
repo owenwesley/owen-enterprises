@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -26,6 +26,13 @@ import {
 } from './hooks/useMeetings';
 import { useChairs } from './hooks/useChairs';
 import { useMemos }  from './hooks/useMemos';
+import { sendReport } from './utils/sendReport';
+import { useMeetingReports } from './hooks/useMeetingReports';
+import { useMeetingLogo, LOGO_CHANGED } from './hooks/useMeetingLogo';
+import MeetingLogo from './components/MeetingLogo';
+import ReportsBanner from './components/ReportsBanner';
+import Alert from '@mui/material/Alert';
+import { postFormData, deleteFetch, notifyError } from '../../utils/api';
 
 const sxStyles = {
   root:      { padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -122,6 +129,10 @@ export default function MeetingsPage() {
   const { state } = useAppContext();
   const { user } = state;
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const logoInput = useRef(null);
+  const { reports } = useMeetingReports();
+  const { custom: hasOwnLogo } = useMeetingLogo();
   const headerRef = useHeaderRowOffset();
 
   const {
@@ -149,7 +160,36 @@ export default function MeetingsPage() {
   const handleAdd = async () => { setBusy(true); await addMeeting();  setBusy(false); };
   const handleReset = async () => {
     if (!window.confirm('Reset period? This will clear all rows and carry over totals.')) return;
-    setBusy(true); await resetMeetings(); setBusy(false);
+    setBusy(true); setNotice('');
+    // 1.13.5: build the landscape PDF (with the meeting logo) and save it on the server. The table is reset
+    // ONLY when the server confirms the save; any failure leaves every row untouched. The saved report then
+    // waits (badge on the Meetings link + banner below) until the user prints or saves it.
+    const name = await sendReport({ userId: user.id, rows, totals });
+    if (name) {
+      await resetMeetings();
+      setNotice(`The table was reset. Your report "${name}" is ready to print or save (see the banner above the table).`);
+    }
+    setBusy(false);
+  };
+  const handleLogoFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) { notifyError('Choose a PNG, JPG or WebP picture.'); return; }
+    if (file.size > 3 * 1024 * 1024) { notifyError('That picture is too large (3 MB at most).'); return; }
+    setBusy(true);
+    const form = new FormData();
+    form.append('logo', file);
+    const res = await postFormData(`/meetings/logo/${user.id}`, form);
+    if (res && res.ok) window.dispatchEvent(new Event(LOGO_CHANGED));
+    setBusy(false);
+  };
+  const handleLogoRemove = async () => {
+    if (!window.confirm('Remove your meeting logo? The default logo will be used again.')) return;
+    setBusy(true);
+    const res = await deleteFetch(`/meetings/logo/${user.id}`);
+    if (res && res.ok) window.dispatchEvent(new Event(LOGO_CHANGED));
+    setBusy(false);
   };
   const handleStop = async () => { setBusy(true); await stopEditing(); setBusy(false); };
   const handleCancel = () => { cancelEditing(); };
@@ -181,6 +221,7 @@ export default function MeetingsPage() {
     <div style={sxStyles.root}>
       {/* Toolbar */}
       <div style={sxStyles.toolbar}>
+        <MeetingLogo size={36} />
         <Typography variant="h6" style={{ fontWeight: 700, color: '#1a237e' }}>Meetings</Typography>
         <Button sx={sxStyles.addBtn} variant="contained" size="small"
           onClick={handleAdd} disabled={busy}
@@ -191,6 +232,11 @@ export default function MeetingsPage() {
           onClick={handleReset} disabled={busy}>
           Reset Period
         </Button>
+        <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleLogoFile} />
+        <Button size="small" variant="outlined" disabled={busy} onClick={() => logoInput.current && logoInput.current.click()}>
+          {hasOwnLogo ? 'Change logo' : 'Add logo'}
+        </Button>
+        {hasOwnLogo && <Button size="small" variant="text" disabled={busy} onClick={handleLogoRemove}>Remove logo</Button>}
         <Typography variant="body2" sx={{ ml: { md: 'auto' }, width: { xs: '100%', md: 'auto' }, color: '#555' }}>
           Avg Attendance:&nbsp;<strong>{totals.avgAttendance}</strong>
           &nbsp;|&nbsp;Area Donation:&nbsp;<strong>${totals.areaDonation}</strong>
@@ -198,6 +244,9 @@ export default function MeetingsPage() {
           <strong>${rows.length ? rows[rows.length - 1].balance : '0.00'}</strong>
         </Typography>
       </div>
+
+      {notice && <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setNotice('')}>{notice}</Alert>}
+      <ReportsBanner userId={user.id} reports={reports} />
 
       {/* Table */}
       <Paper elevation={2}>

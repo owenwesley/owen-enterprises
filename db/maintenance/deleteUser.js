@@ -107,6 +107,9 @@ async function main(userName, apply, log = console.log) {
       for (const k of photoKeys) await removeFiles(k);
       log(`  removed ${photoKeys.length} patient photo file(s)`);
     }
+    // 1.13.5: the user's meeting logo and any reports still waiting to be printed.
+    try { await require('../../utils/meetingReports').removeAllForUser(u.id); log('  removed meeting logo / waiting reports'); }
+    catch (e) { log(`  could not remove the meeting files: ${e.message}`); }
     log(`\nDeleted user ${u.userName} and all of their data.`);
     return { deleted: true, userId: u.id, rows: plan };
   } finally {

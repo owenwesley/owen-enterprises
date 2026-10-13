@@ -68,21 +68,45 @@ function messageFor(res, body) {
   return (body && body.error) || `Request failed (HTTP ${res.status}).`;
 }
 
+// Reads the JSON body. When the server DID answer but not with JSON (an HTML error page from a proxy or an
+// old server without the route, a size limit, a crash page) say so with the HTTP status, instead of the
+// misleading "Could not reach the server".
+async function readJson(res, url) {
+  try { return await res.json(); }
+  catch {
+    report(url, `The server answered with something the app cannot read (HTTP ${res.status}). `
+      + (res.status === 404 ? 'This server may not have the latest files, or was not restarted.'
+        : res.status === 413 ? 'The upload was too large for the server.' : 'Try again; if it keeps happening, tell the site owner.'));
+    return null;
+  }
+}
+
 async function request(method, url, body, label) {
+  let res;
   try {
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method,
       headers: authHeaders(),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    const data = await res.json();
-    if (!res.ok) reportFailure(url, res, data);
-    return data;
   } catch (err) {
     console.error(`${label} ${url} failed:`, err);
     report(url, 'Could not reach the server. Check your connection and try again.');
     return null;
   }
+  const data = await readJson(res, url);
+  if (data === null) return null;
+  if (!res.ok) reportFailure(url, res, data);
+  return data;
+}
+
+/** GET for background checks (badges): never shows an error toast. Returns the parsed body or null. */
+export async function getQuiet(url) {
+  try {
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
 }
 
 export const getFetch    = (url)       => request('GET',    url, undefined, 'GET');
@@ -96,21 +120,23 @@ export const deleteFetch = (url, body) => request('DELETE', url, body,      'DEL
  * Only the Authorization header is attached.
  */
 export async function postFormData(url, formData) {
+  let res;
   try {
     const token = _getToken() || storedToken();
-    const res = await fetch(url, {
+    res = await fetch(url, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
-    const data = await res.json();
-    if (!res.ok) reportFailure(url, res, data);
-    return data;
   } catch (err) {
     console.error(`POST (form-data) ${url} failed:`, err);
     report(url, 'Could not reach the server. Check your connection and try again.');
     return null;
   }
+  const data = await readJson(res, url);
+  if (data === null) return null;
+  if (!res.ok) reportFailure(url, res, data);
+  return data;
 }
 
 /**

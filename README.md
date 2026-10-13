@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.11.29** (in both `package.json` and `client/package.json` — kept in sync as of this release; the root `package.json` had been left at 1.0.0 since the project began).
+**Current version: 1.13.5** (in both `package.json` and `client/package.json`, kept in sync).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -224,7 +224,7 @@ All routes except `/auth/signup`, `/auth/signin` and `/auth/tokenIsValid` requir
 | Feature toggles | `/owenenterprises/features` — `GET /:user_id`, `POST /edit/:user_id` |
 | BGTracker | `/bgtracker/{readings, bloodpressures, weights, medications, nutritions, preferences}` |
 | Community Library | `/communitylibrary/{books, movies, contacts}`, `POST /communitylibrary/upload` |
-| Meetings | `/meetings`, `/meetings/chairs`, `/meetings/memos` |
+| Meetings | `/meetings`, `/meetings/chairs`, `/meetings/memos`, `/meetings/reports/:user_id` (save, list), `/meetings/reports/:name/:user_id` (GET download, DELETE = "I saved it"), `/meetings/logo/:user_id` (1.13.5, see below) |
 | Static | `/images/...` (covers) and, in production, the built React app |
 
 Each data area follows the same pattern:
@@ -380,6 +380,7 @@ Everything here is **off until you set it in `.env`**, so installing the release
 | `TWILIO_VERIFY_SERVICE_SID` | Twilio console > Verify > Services > create one (starts `VA`) |
 | `MFA_KEY` | long random string; encrypts phone numbers and old authenticator secrets. Set once and keep it |
 | `PATIENT_PHOTOS=on` | turn on patient photos (see 1.13.0). `PHOTO_DIR` (optional) = where the files are kept, `PHOTO_MAX_PER_PATIENT` (optional, default 200) |
+| `PDF_DIR` (optional) | where Meetings reports and logos are kept (see 1.13.5). Default: a folder `pdf` in the folder ABOVE the app (IONOS: `/var/www/vhosts/owen-enterprises.net/pdf`, next to `patient-photos`). Never inside `client/public` |
 | `FORCE_HTTPS=on` | see above |
 | `MFA_SMS_PROVIDER=mock` | **tests only**: no text is sent and the code is always 123456. Never on a real site |
 
@@ -405,6 +406,20 @@ Please read these before putting real users' data on it.
 
 ## Version history
 
+**1.13.5** — Meetings: **Reset Period saves a PDF report on the server (replaces the 1.13.4 Google Drive upload), a badge tells the user to print or save it, and the meeting logo.** No Google, no new packages, no new settings (optional `PDF_DIR`).
+- **Reset Period:** confirm -> the browser draws the landscape PDF (logo, "Richfield NA Report", month, summary line, the whole table, TOTALS) -> `POST /meetings/reports/:user_id` saves it as `pdf/<user_id>/reports/Richfield NA Report-Oct-26.pdf` -> only when the server confirms does the existing `resetMeetings()` run (a failed save leaves every row untouched). The month in the name is the month of the NEWEST real meeting in the table (the "Prv Bal" / "Area Donation" rows a reset writes are ignored); with no meeting rows it is the month before today (a reset on 11-01-26 gives `Oct-26`). A name still waiting gets `-2`, `-3` ... so a report is never overwritten (the table is already cleared, the PDF is the only copy). At most 24 waiting.
+- **Badge:** the Meetings link in the navbar (and the hamburger on phones) shows a red count while reports wait; the Meetings page shows a banner with **Download** and **Print** (Print opens the PDF in a new tab). The count is checked on load, every minute, when the tab regains focus, and right after a reset or download.
+- **Kept until "I saved it" (safety):** `GET /meetings/reports/:name/:user_id` streams the PDF and does NOT delete it, because the server cannot know the browser saved the file or that it was printed. The banner has **Download**, **Print** and **I saved it**; "I saved it" asks "Have you saved or printed ...?" and then calls `DELETE /meetings/reports/:name/:user_id`, which removes the file and clears the badge. Until then the report, the badge and the banner stay (also after the user closes the page or signs out). Downloading again is always possible. Limit: 24 waiting reports per user.
+- **Where files live (never `client/public`, nothing is served statically):** `<PDF_DIR>/<user_id>/logo.webp` (optional) and `<PDF_DIR>/<user_id>/reports/*.pdf`. Handled by `utils/meetingReports.js` and `routes/meetings/reports.js`, behind sign-in and `ownerOnly()` (the user id is the last URL segment). File names are checked against one strict pattern. `db/maintenance/deleteUser.js` removes the user's whole `pdf/<user_id>` folder.
+- **Meeting logo:** the Meetings page has **Add logo / Change logo / Remove logo** (PNG, JPG or WebP, 3 MB max; SVG refused). The server re-encodes it as WebP, max 256 px, metadata dropped (`POST/GET/DELETE /meetings/logo/:user_id`). Without one, the generic `client/public/images/meetings/default-logo.webp` shows (replace that file to change the default). The logo appears in the navbar in front of "Meetings", beside the page title, and at the top of the PDF (the page converts it to PNG for jsPDF). An own-logo lookup that finds nothing answers 404 on purpose (a harmless red line in the browser console).
+- **"Could not reach the server" (fixed in the same version):** the badge check runs in the background (every minute) and no longer shows an error toast when it fails (`getQuiet` in `utils/api.js`). `request()` and `postFormData()` now tell two cases apart: a real network failure still says "Could not reach the server"; a reply that is not JSON (an HTML 404/413/502 page from an old server without the routes, a proxy size limit, a crash page) now says "The server answered with something the app cannot read (HTTP 404) ..." with the status. The report PDF is also much smaller (33 KB instead of 457 KB for 30 rows: `compress: true`, logo drawn at 160 px), so it cannot trip an upload size limit.
+- **Removed:** the Google Drive route `routes/meetings/sendReport.js`, `@googleapis/drive`, `GOOGLE_*` settings and the Google setup steps, the email prompt. Nothing to set up at Google any more.
+- **Client files:** `features/meetings/utils/sendReport.js`, `hooks/useMeetingReports.js`, `hooks/useMeetingLogo.js`, `components/MeetingLogo.jsx`, `components/ReportsBanner.jsx`; `MeetingsPage.jsx` and `components/NavBar/index.jsx` changed.
+- **Tests:** suite `report` (`npm run check:report`) rewritten, 45 checks, no database: names and months, `-2`, other users locked out, bad names, download keeps the file, DELETE removes it, logo upload / limits / SVG refused. `npm run check` = 16 suites, 689 checks, all pass. Navbar badge: shown inline after the word (not as a corner badge), because the link strip clips anything outside it.
+- **Verified:** real server + MariaDB + headless Chromium: 30 meetings -> Reset Period -> report saved, table reset, badge 1, banner, logo upload, Download saved the file and the server copy was KEPT (badge stayed), "I saved it" removed it, banner and badge cleared; the PDF (30 rows, long chair names, 26 columns) fits one letter-landscape page with the logo on top; phone width (390 px) page and menu. **Not verified:** the Print button's new tab on a real phone (pop-up blockers), many rows (the table paginates, page 2 never looked at), IONOS (does `/var/www/vhosts/owen-enterprises.net/pdf` get created and survive a redeploy), a real Android/iPhone.
+- **Upgrade:** upload the files, restart; no "NPM install" needed (no package changed). Optional: back up the `pdf` folder with the database.
+
+**1.13.4 (replaced by 1.13.5)** — sent the report to Google Drive after asking for an email. Removed in 1.13.5; do not re-add unless asked.
 **1.13.3** — the root `images/` folder is gone. The four placeholder pictures moved to `client/public/images/placeholders/` (served first; the server still reads a root `images/` folder as a fallback if one exists, so a live server that still has old pictures there keeps working). Doctor note field label shortened for phones.
 
 **1.13.2 (same entry as 1.13.1)** — photo upload no longer runs out of memory (Android reported "can't complete operation due to low memory").
