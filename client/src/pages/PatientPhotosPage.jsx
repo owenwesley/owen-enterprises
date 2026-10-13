@@ -13,6 +13,7 @@ import DialogActions from '@mui/material/DialogActions';
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import { getFetch, putFetch, deleteFetch, postFormData, notifyError } from '../utils/api';
 import AuthImage from '../components/AuthImage';
 import shrinkImage from '../utils/shrinkImage';
@@ -37,6 +38,7 @@ export default function PatientPhotosPage() {
   const [view, setView] = useState(null);       // photo shown large
   const [confirmDel, setConfirmDel] = useState(null);
   const fileRef = useRef(null);
+  const pickRef = useRef(null);
 
   const load = useCallback(async () => {
     const data = await getFetch('/patient-photos');
@@ -86,13 +88,20 @@ export default function PatientPhotosPage() {
         </Box>
         <FormControlLabel control={<Switch size="small" checked={share} onChange={(e) => setShare(e.target.checked)} />}
           label="Share this photo with my doctors" />
-        <Box>
-          {/* capture="environment" opens the phone camera straight away; on a computer it is a file picker */}
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {/* capture="environment" opens the phone camera straight away. Some phones run out of memory
+              there, so a second button opens the gallery / file picker instead (no capture). */}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick}
-            style={{ display: 'none' }} aria-label="Take or choose a photo" />
+            style={{ display: 'none' }} aria-label="Take a photo" />
+          <input ref={pickRef} type="file" accept="image/*" onChange={onPick}
+            style={{ display: 'none' }} aria-label="Choose a photo from the gallery" />
           <Button variant="contained" startIcon={<PhotoCameraIcon />} disabled={busy}
             onClick={() => fileRef.current && fileRef.current.click()}>
-            {busy ? 'Saving…' : 'Take or choose a photo'}
+            {busy ? 'Saving…' : 'Take a photo'}
+          </Button>
+          <Button variant="outlined" startIcon={<PhotoLibraryIcon />} disabled={busy}
+            onClick={() => pickRef.current && pickRef.current.click()}>
+            Choose from gallery
           </Button>
         </Box>
 
