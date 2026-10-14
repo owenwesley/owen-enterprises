@@ -9,11 +9,12 @@
  *   signup   10 sign-ups per IP per hour
  *   mfa      15 code sends/verifies per IP per 15 min (routes/mfa.js also has its own per-user limits)
  *   borrow   30 borrow requests per signed-in user per hour
+ *   foods    40 food lookups per signed-in user per hour (1.13.6; the free fatsecret plan allows 5,000 calls a day for the whole site)
  *   api      1200 requests per IP per 5 min across the whole API (a backstop, far above normal use)
  *
  * Every number can be changed in .env:
  *   RATE_LIMIT_SIGNIN_MAX, RATE_LIMIT_SIGNUP_MAX, RATE_LIMIT_MFA_MAX,
- *   RATE_LIMIT_BORROW_MAX, RATE_LIMIT_API_MAX
+ *   RATE_LIMIT_BORROW_MAX, RATE_LIMIT_FOODS_MAX, RATE_LIMIT_API_MAX
  * RATE_LIMIT=off turns every limit off (the automated checks use it).
  *
  * IMPORTANT behind a reverse proxy / host that terminates HTTPS: every visitor then looks
@@ -53,6 +54,9 @@ module.exports = {
   borrow: make({ windowMs: 60 * MIN, max: num('RATE_LIMIT_BORROW_MAX', 30),
     keyGenerator: (req) => `u${req.user && req.user.id}`,
     message: 'You are sending borrow requests too quickly.' }),
+  foods: make({ windowMs: 60 * MIN, max: num('RATE_LIMIT_FOODS_MAX', 40),
+    keyGenerator: (req) => `u${req.user && req.user.id}`,
+    message: 'You are looking up foods too quickly.' }),
   api: make({ windowMs: 5 * MIN, max: num('RATE_LIMIT_API_MAX', 1200),
     message: 'Too many requests.' }),
 };

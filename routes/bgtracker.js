@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 router.use('/bloodpressures', require('./bgtracker/bloodpressures'));
+router.use('/foods',          require('./bgtracker/foods'));
 router.use('/medications',    require('./bgtracker/medications'));
 router.use('/nutritions',     require('./bgtracker/nutritions'));
 router.use('/preferences',    require('./bgtracker/preferences'));

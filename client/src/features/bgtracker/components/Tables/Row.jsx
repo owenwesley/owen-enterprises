@@ -9,8 +9,9 @@ import Checkbox from "@mui/material/Checkbox";
 import Tooltip from "@mui/material/Tooltip";
 import { formatDate, toDateInputValue } from "../../../../utils/dateFormat";
 import { editingRowSx, editingCellSx } from "../Styles/editMode";
+import FoodCell from "./FoodCell";
 
-const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, editIdx, editDraft, rowTint) => {
+const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, editIdx, editDraft, rowTint, foodCtx) => {
   // editIdx holds the row's database id, not its array position — this keeps
   // editing correct even though the table renders a filtered subset.
   const rowId = x.id;
@@ -33,7 +34,9 @@ const Row = (x, i, readings, header, handleChange, startEditing, stopEditing, ed
           key={`trc-${k}`}
           sx={editing ? editingCellSx : undefined}
         >
-          {!editing && y.type === "checkbox" ? (
+          {y.type === "food" ? (
+            <FoodCell row={x} src={src} slot={y.slot} editing={editing} foodCtx={foodCtx} />
+          ) : !editing && y.type === "checkbox" ? (
             <Checkbox name={y.prop} checked={Boolean(x[y.prop])} disabled />
           ) : editing && y.type === "checkbox" ? (
             <Checkbox

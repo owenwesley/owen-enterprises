@@ -3,6 +3,7 @@ import { useAppContext } from '../../../context/AppContext';
 import { useReadings }   from '../hooks/useReadings';
 import { useBloodPressure } from '../hooks/useBloodPressure';
 import { useNutrition } from '../hooks/useNutrition';
+import { useFoodEnabled } from '../hooks/useFoodLookup';
 import { buildColumns, bpColumnsFor } from '../components/Tables/buildColumns';
 import BGTable           from '../components/Tables/BGTable';
 import TableOneBP        from '../components/Tables/TableOneBP';
@@ -21,6 +22,7 @@ export default function ReadingsPage() {
 
   const { readings, getReadings, addReading, handleReadingChange, startEditingReading, stopEditingReading, cancelEditingReading, editDraft } = useReadings();
   const { nutritions, getNutritions } = useNutrition();
+  const foodEnabled = useFoodEnabled();   // 1.13.6: the site has a food database key and this person uses Nutrition
   const { getBloodPressures, addBP, handleBPChange, startEditingBP, stopEditingBP, cancelEditingBP, editDraft: bpEditDraft } = useBloodPressure();
 
   useEffect(() => {
@@ -33,8 +35,8 @@ export default function ReadingsPage() {
   // The calorie-goal row colours need each day's nutrition rows, which are otherwise
   // only loaded on the Nutrition page. Skip the request when there is no goal.
   useEffect(() => {
-    if (user.isLogedIn && colourByCalories) getNutritions();
-  }, [user.isLogedIn, colourByCalories, getNutritions]);
+    if (user.isLogedIn && (colourByCalories || foodEnabled)) getNutritions();
+  }, [user.isLogedIn, colourByCalories, foodEnabled, getNutritions]);
 
   if (chkBP && timesPD <= 2) {
     return (
@@ -50,7 +52,7 @@ export default function ReadingsPage() {
     );
   }
 
-  const { groups, columns } = buildColumns(preference);
+  const { groups, columns } = buildColumns({ ...preference, foodLookup: foodEnabled });
 
   // Rule 1: the BG table displays ONLY the last 120 days. This is a display
   // filter — the full 10-year history stays in the database and continues to
@@ -65,6 +67,21 @@ export default function ReadingsPage() {
     rowTint = (row) => CALORIE_TINT[calorieStatus(byDate.get(formatDate(row.date)), calorieGoal).band];
   }
 
+  // "What I ate" cells show the food name already saved in that day's Nutrition row.
+  let foodCtx;
+  if (foodEnabled) {
+    const names = new Map();
+    const slots = nutritionSlotsFor(timesPD);
+    for (const n of nutritions) {
+      for (const s of slots) {
+        const name = n[`foodName${s.key}`];
+        const key = `${formatDate(n.date)}|${s.key}`;
+        if (name && !names.has(key)) names.set(key, name);
+      }
+    }
+    foodCtx = { names };
+  }
+
   return (
     <Box sx={readingsPageSx(A1C)}>
       <BGTable
@@ -73,7 +90,7 @@ export default function ReadingsPage() {
         handleChange={handleReadingChange}
         startEditing={startEditingReading} stopEditing={stopEditingReading}
         cancelEditing={cancelEditingReading} editDraft={editDraft}
-        A1C={A1C} rowTint={rowTint}
+        A1C={A1C} rowTint={rowTint} foodCtx={foodCtx}
       />
     </Box>
   );

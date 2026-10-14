@@ -9,6 +9,8 @@
  * difference was which columns appeared.
  */
 
+import { nutritionSlotsFor } from './nutritionColumns';
+
 // Ordered meal slots. hasSF = true means this slot gets Slow+Fast when typInsulin===2
 const SLOTS = [
   { key: 'B',   label: 'Breakfast', hasSF: true  },
@@ -34,6 +36,10 @@ export function buildColumns(pref) {
   const { timesPD = 1, chkMeds, chkInsulin, typInsulin } = pref;
   const activeKeys = SLOTS_FOR_TIMES[timesPD] || ['B'];
   const activeSlots = SLOTS.filter((s) => activeKeys.includes(s.key));
+  // 1.13.6 "What I ate" box right after Sugar: only when the site has a food database key (pref.foodLookup,
+  // set by ReadingsPage), Nutrition is on, and that meal also has a column in the Nutrition table.
+  const foodSlots = pref.foodLookup && pref.chkNutrition && Number(timesPD) >= 3
+    ? nutritionSlotsFor(timesPD).map((s) => s.key) : [];
 
   const groups  = [];
   const columns = [{ name: 'Date', prop: 'date', type: 'date' }];
@@ -43,6 +49,9 @@ export function buildColumns(pref) {
 
     // Always: sugar + carbs
     slotCols.push({ name: 'Sugar', prop: `sugar${slot.key}`, type: 'number' });
+    if (foodSlots.includes(slot.key)) {
+      slotCols.push({ name: 'What I ate', prop: `food${slot.key}`, type: 'food', slot: slot.key });
+    }
     slotCols.push({ name: 'Carbs', prop: `carbs${slot.key}`, type: 'number' });
 
     // Insulin columns

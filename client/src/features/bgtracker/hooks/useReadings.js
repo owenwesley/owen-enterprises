@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { coerceByFieldName } from '../../../utils/coerceInput';
 import { useAppContext } from '../../../context/AppContext';
 import { postFetch, getFetch } from '../../../utils/api';
+import { applyFood } from './useFoodLookup';
 import { todayFormatted, tenYearRetentionDays, earliestYear } from '../../../utils/dateFormat';
 import { calcSlidingScale } from '../utils/slidingScale';
 import { editMeds } from './useMedications';
@@ -38,6 +39,23 @@ export async function saveReading(user, readings, editIdx) {
     sugarBed: r.sugarBed, carbsBed: r.carbsBed,
     insulinSBed: r.insulinSBed, insulinFBed: r.insulinFBed, chkMedsBed: r.chkMedsBed,
   }).catch(console.error);
+}
+
+// 1.13.6 "What I ate": meals confirmed in the lookup dialog wait in the row's draft (foodPending<slot>) and are written to
+// the day's Nutrition row only now, when the row is saved. Then the Nutrition list is refreshed for the colours / names.
+async function applyPendingFoods(user, row, dispatch) {
+  let any = false;
+  for (const slot of ['B', 'L', 'D', 'BB', 'Bed']) {
+    const pending = row[`foodPending${slot}`];
+    if (pending && pending.nutrients) {
+      await applyFood(user.id, { date: row.date, slot, text: pending.text, nutrients: pending.nutrients });
+      any = true;
+    }
+  }
+  if (any) {
+    const data = await getFetch(`/bgtracker/nutritions/${user.id}`);
+    dispatch({ type: 'SET_NUTRITIONS', payload: data?.results || [] });
+  }
 }
 
 // ── hook ────────────────────────────────────────────────────────────────────────
@@ -227,6 +245,8 @@ export function useReadings() {
     if (workingMeds !== medications) {
       dispatch({ type: 'SET_MEDICATIONS', payload: workingMeds });
     }
+
+    await applyPendingFoods(user, row, dispatch);
 
     await getReadings(user.id);
   }, [readings, editIdx, editDraft, pref, user, medications, dispatch, getReadings]);

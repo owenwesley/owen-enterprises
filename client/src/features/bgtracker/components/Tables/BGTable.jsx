@@ -107,6 +107,7 @@ export default function BGTable({
   editDraft,
   A1C,
   rowTint,   // optional (row) => colour, used for the calorie-goal row colours
+  foodCtx,   // optional { names, pref, enabled }: what the "What I ate" cells show and need
 }) {
   const isGrouped = groups && groups.length > 1;
   const headerRef = useHeaderRowOffset();
@@ -159,7 +160,7 @@ export default function BGTable({
             {rows.map((x, i) =>
               Row(
                 x, i, rows, columns,
-                handleChange, startEditing, stopEditing, editIdx, editDraft, rowTint
+                handleChange, startEditing, stopEditing, editIdx, editDraft, rowTint, foodCtx
               )
             )}
           </TableBody>

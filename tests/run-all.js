@@ -40,6 +40,7 @@ const SUITES = [
   { name: 'images',    file: 'image-layout.js',            server: null },
   { name: 'photos',    file: 'patient-photos.js',          server: 'plain' },
   { name: 'report',    file: 'meeting-report.js',          server: null },
+  { name: 'foods',     file: 'food-lookup.js',             server: null },
 ];
 const only = process.argv.slice(2);
 const todo = only.length ? SUITES.filter((s) => only.includes(s.name)) : SUITES;
