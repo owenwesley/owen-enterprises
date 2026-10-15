@@ -35,6 +35,8 @@ const SUITES = [
   { name: 'clinics',   file: 'clinics-hospitals.js',       server: 'plain' },
   { name: 'hipaa',     file: 'hipaa-gate.js',              server: 'hipaa' },
   { name: 'mfa',       file: 'mfa.js',                     server: 'hipaa' },
+  { name: 'totp',      file: 'totp.js',                    server: 'hipaa' },
+  { name: 'mfaredis',  file: 'mfa-redis.js',               server: null },
   { name: 'twilio',    file: 'twilio-request.js',          server: null },
   { name: 'hardening', file: 'hardening.js',               server: null },
   { name: 'images',    file: 'image-layout.js',            server: null },
@@ -70,7 +72,7 @@ function runSuite(s, base) {
   return new Promise((resolve) => {
     const env = { ...process.env, RATE_LIMIT: 'off', PHOTO_DIR: PHOTO_TEST_DIR };
     if (base) env.BASE_URL = base;
-    if (s.server === 'hipaa' && s.name === 'mfa') env.MFA_SMS_PROVIDER = 'mock';
+    if (s.server === 'hipaa' && (s.name === 'mfa' || s.name === 'totp')) env.MFA_SMS_PROVIDER = 'mock';
     const child = spawn(process.execPath, [path.join('tests', s.file)], { cwd: root, env });
     let out = '';
     child.stdout.on('data', (d) => { out += d; }); child.stderr.on('data', (d) => { out += d; });

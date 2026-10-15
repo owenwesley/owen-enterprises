@@ -6,8 +6,9 @@ import TextField from '@mui/material/TextField';
 import { useAppContext } from '../context/AppContext';
 import { getFetch, postFetch } from '../utils/api';
 import { forgetDeviceToken } from '../hooks/useAuth';
+import TotpSetup from '../components/mfa/TotpSetup';
 
-// Two-step sign-in by text message (US and Canada numbers). Server: routes/mfa.js.
+// Two-step sign-in with an authenticator app (6-digit codes) or by text message (US and Canada numbers). Server: routes/mfa.js.
 const sxStyles = {
   wrapper: {
     flex: '1 1 auto', minHeight: 0, overflowY: 'auto', width: '100%',
@@ -33,7 +34,7 @@ const sxStyles = {
 export default function SecurityPage() {
   const { state } = useAppContext();
   const [status, setStatus] = useState(null);
-  // mode: 'idle' | 'phone' (entering number) | 'code' (entering the texted code) | 'off' (turning off)
+  // mode: 'idle' | 'totp' (authenticator set-up) | 'phone' (entering number) | 'code' (entering the texted code) | 'off' (turning off)
   const [mode, setMode] = useState('idle');
   const [recovery, setRecovery] = useState(null);
   const [phone, setPhone] = useState('');
@@ -51,6 +52,14 @@ export default function SecurityPage() {
 
   const reset = () => { setMode('idle'); setPhone(''); setPassword(''); setCode(''); setError(''); };
   const fail = (res, fallback) => setError((res && res.error) || fallback);
+
+  // Authenticator app: the two calls TotpSetup needs (it knows nothing about fetch or tokens).
+  const startTotp = useCallback((pw) => postFetch('/auth/mfa/totp/start', pw ? { password: pw } : {}), []);
+  const confirmTotp = useCallback((c) => postFetch('/auth/mfa/totp/confirm', { code: c }), []);
+  const totpEnabled = useCallback((codes) => {
+    if (codes) setRecovery(codes);
+    reset(); setMessage('Two-step sign-in is on with your authenticator app.'); load();
+  }, [load]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendCode = async () => {
     setBusy(true); setError(''); setMessage('');
@@ -120,9 +129,9 @@ export default function SecurityPage() {
         {!status && <Typography sx={sxStyles.text}>Loading…</Typography>}
 
         {status && !status.textMessagesAvailable && (
-          <Typography sx={sxStyles.err}>
-            Text messages are not set up on this server yet. The server owner needs to add the Twilio
-            settings (see the README) before two-step sign-in can be turned on.
+          <Typography sx={sxStyles.hint}>
+            Text messages are not set up on this server (the owner would need to add the Twilio settings),
+            but an authenticator app works without them.
           </Typography>
         )}
 
@@ -150,12 +159,17 @@ export default function SecurityPage() {
           </>
         )}
 
+        {status && !recovery && mode === 'totp' && (
+          <TotpSetup startSetup={startTotp} confirmSetup={confirmTotp} needPassword={status.enabled}
+            onEnabled={totpEnabled} onCancel={reset} accentColor="#1a237e" />
+        )}
+
         {status && !recovery && mode === 'phone' && phoneForm(status.enabled)}
 
         {status && !recovery && mode === 'off' && (
           <>
             <Typography sx={sxStyles.text}>
-              To turn it off, enter your password and a code. Press "Text me a code" first,
+              To turn it off, enter your password and a code from {status.method === 'sms' ? 'a text message (press "Text me a code" first)' : 'your authenticator app'},
               or use a recovery code.
             </Typography>
             <TextField label="Password" type="password" size="small" value={password}
@@ -174,13 +188,18 @@ export default function SecurityPage() {
         {status && !recovery && mode === 'idle' && !status.enabled && (
           <>
             <Typography sx={sxStyles.text}>
-              Adds a code texted to your phone to your password. It is required before you can use
-              BGTracker health information. Works with US and Canadian mobile numbers.
+              Adds a 6-digit code to your password: from an authenticator app on your phone
+              (Google Authenticator, Microsoft Authenticator, Authy, 1Password, Bitwarden…), or texted to
+              a US or Canadian mobile number. It is required before you can use BGTracker health information.
             </Typography>
             {message && <Typography sx={sxStyles.ok}>{message}</Typography>}
             <Button sx={sxStyles.btn} variant="contained"
-              disabled={!status.textMessagesAvailable} onClick={() => { setError(''); setMessage(''); setMode('phone'); }}>
-              Turn on
+              onClick={() => { setError(''); setMessage(''); setMode('totp'); }}>
+              Set up an authenticator app
+            </Button>
+            <Button variant="outlined" disabled={!status.textMessagesAvailable}
+              onClick={() => { setError(''); setMessage(''); setMode('phone'); }}>
+              Use text messages instead
             </Button>
           </>
         )}
@@ -192,13 +211,16 @@ export default function SecurityPage() {
               <Typography sx={sxStyles.text}>Codes are texted to the phone ending in {status.phoneLast4}.</Typography>
             ) : (
               <Typography sx={sxStyles.text}>
-                You are using an authenticator app. You can switch to text messages below.
+                You are using an authenticator app.
               </Typography>
             )}
             <Typography sx={sxStyles.hint}>
               Recovery codes left: {status.recoveryCodesLeft} · Remembered devices: {status.trustedDevices}
             </Typography>
             {message && <Typography sx={sxStyles.ok}>{message}</Typography>}
+            <Button variant="outlined" onClick={() => { setError(''); setMessage(''); setMode('totp'); }}>
+              {status.method === 'sms' ? 'Switch to an authenticator app' : 'Set up a new authenticator app'}
+            </Button>
             <Button variant="outlined" disabled={!status.textMessagesAvailable}
               onClick={() => { setError(''); setMessage(''); setMode('phone'); }}>
               {status.method === 'sms' ? 'Change phone number' : 'Switch to text messages'}

@@ -227,7 +227,7 @@ function tableMap(names) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {
-        // Two-step sign-in. Now by text message: phoneEnc is the phone number (stored
+        // Two-step sign-in. Authenticator app (secretEnc live, pendingSecretEnc while confirming) or text message: phoneEnc is the phone number (stored
         // encrypted) and pendingPhoneEnc one being confirmed. secretEnc and lastCounter
         // belong to the older authenticator-app method and are only used for people who
         // enrolled that way before the switch.
@@ -237,6 +237,7 @@ function tableMap(names) {
           secretEnc   VARCHAR(255) NOT NULL DEFAULT '',
           enabled     TINYINT(1)   NOT NULL DEFAULT 0,
           lastCounter BIGINT       NOT NULL DEFAULT 0,
+            pendingSecretEnc VARCHAR(255) NOT NULL DEFAULT '',
           pendingPhoneEnc VARCHAR(255) NOT NULL DEFAULT '',
           phoneEnc        VARCHAR(255) NOT NULL DEFAULT '',
           phoneLast4      CHAR(4)      NOT NULL DEFAULT '',

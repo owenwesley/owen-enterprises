@@ -30,12 +30,14 @@ const num = (name, dflt) => {
 };
 const noop = (req, res, next) => next();
 
-function make({ windowMs, max, message, keyGenerator, skipSuccessfulRequests }) {
+function make({ windowMs, max, message, keyGenerator, skipSuccessfulRequests, store, requestWasSuccessful }) {
   if (off) return noop;
   return rateLimit({
     windowMs, max, skipSuccessfulRequests: !!skipSuccessfulRequests,
     standardHeaders: 'draft-7', legacyHeaders: false,
     ...(keyGenerator ? { keyGenerator } : {}),
+    ...(store ? { store: store() } : {}),
+    ...(requestWasSuccessful ? { requestWasSuccessful } : {}),
     handler: (req, res) => {
       const retry = Math.max(1, Math.ceil((res.getHeader('Retry-After') || windowMs / 1000) / 60));
       res.status(429).json({ error: `${message} Try again in about ${retry} minute(s).` });
@@ -51,6 +53,13 @@ module.exports = {
     message: 'Too many accounts created from this address.' }),
   mfa: make({ windowMs: 15 * MIN, max: num('RATE_LIMIT_MFA_MAX', 15),
     message: 'Too many verification attempts.' }),
+  // Per-IP brute-force limit on the code check: only FAILED attempts count, and the counter lives in Redis
+  // when REDIS_URL is set (utils/mfaStore.js). HIPAA 45 CFR 164.308(a)(5)(ii)(C) log-in monitoring.
+  mfaVerify: make({ windowMs: 15 * MIN, max: num('RATE_LIMIT_MFA_VERIFY_MAX', 20), skipSuccessfulRequests: true,
+    store: () => require('../utils/mfaStore').rateLimitStore('mfaverify'),
+    // A refused REPLAY (routes/mfa.js sets res.locals.mfaReplay) is not a guess, so it is not counted either.
+    requestWasSuccessful: (req, res) => res.statusCode < 400 || res.locals.mfaReplay === true,
+    message: 'Too many wrong verification attempts.' }),
   borrow: make({ windowMs: 60 * MIN, max: num('RATE_LIMIT_BORROW_MAX', 30),
     keyGenerator: (req) => `u${req.user && req.user.id}`,
     message: 'You are sending borrow requests too quickly.' }),

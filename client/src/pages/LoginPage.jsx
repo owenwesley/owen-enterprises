@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import Checkbox from '@mui/material/Checkbox';
 import Typography from '@mui/material/Typography';
@@ -7,6 +7,7 @@ import TextField from '@mui/material/TextField';
 import Paper from '@mui/material/Paper';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
+import OtpInput from '../components/mfa/OtpInput';
 
 const sxStyles = {
   // Fills the space the app shell gives it and scrolls internally, so the card
@@ -50,6 +51,8 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [remember, setRemember] = useState(false);
   const step2 = Boolean(state.user.mfaRequired);
+  const [useRecovery, setUseRecovery] = useState(false);   // recovery codes are 10 letters/digits: plain text box
+  const [verifying, setVerifying] = useState(false);
 
   const onLogin = async () => {
     const result = await handleLogIn();
@@ -61,6 +64,16 @@ export default function LoginPage() {
     if (result) history.push('/');
   };
 
+  // Called by the six squares the moment the 6th digit lands: no button press needed.
+  // HIPAA 164.312(d): the code goes straight to the server and is never stored in the browser.
+  const onSixDigits = useCallback(async (digits) => {
+    setVerifying(true);
+    const result = await handleMfaVerify(digits, remember);
+    setVerifying(false);
+    if (result) history.push('/');
+    else setCode('');                      // wrong or used code: clear so the next try starts fresh
+  }, [handleMfaVerify, remember, history]);
+
   const onKey = (e) => { if (e.key === 'Enter') onLogin(); };
   const onKeyCode = (e) => { if (e.key === 'Enter') onVerify(); };
 
@@ -71,12 +84,18 @@ export default function LoginPage() {
           <>
             <Typography sx={sxStyles.sub}>
               {state.user.mfaMethod === 'sms'
-                ? (state.user.mfaNotice || 'Enter the code we texted to your phone, or a recovery code.')
-                : 'Enter the 6-digit code from your authenticator app, or a recovery code.'}
+                ? (state.user.mfaNotice || 'Enter the code we texted to your phone.')
+                : 'Enter the 6-digit code from your authenticator app.'}
             </Typography>
-            <TextField label="Code" name="mfaCode" variant="outlined" size="small" autoFocus
-              value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onKeyCode}
-              inputProps={{ inputMode: 'text', autoComplete: 'one-time-code' }} fullWidth />
+            {useRecovery ? (
+              <TextField label="Recovery code" name="mfaCode" variant="outlined" size="small" autoFocus
+                value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onKeyCode}
+                inputProps={{ inputMode: 'text', autoComplete: 'off', autoCapitalize: 'characters' }} fullWidth />
+            ) : (
+              <OtpInput value={code} onChange={setCode} onComplete={onSixDigits} disabled={verifying}
+                error={Boolean(state.user.loginError) && code.length === 0}
+                label="6-digit verification code" accentColor="#1a237e" />
+            )}
             <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem' }}>
               <Checkbox id="remember-device" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               <label htmlFor="remember-device">Remember this device for 30 days</label>
@@ -84,9 +103,17 @@ export default function LoginPage() {
             {state.user.loginError && (
               <Typography sx={sxStyles.err}>{state.user.loginError}</Typography>
             )}
-            <Button sx={sxStyles.btn} variant="contained" fullWidth onClick={onVerify}>
-              Verify
-            </Button>
+            {useRecovery && (
+              <Button sx={sxStyles.btn} variant="contained" fullWidth onClick={onVerify}>
+                Verify
+              </Button>
+            )}
+            <Typography sx={sxStyles.link} variant="body2">
+              <span style={{ color: '#1a237e', cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => { setCode(''); setUseRecovery(!useRecovery); }}>
+                {useRecovery ? 'Use my 6-digit code instead' : 'Use a recovery code instead'}
+              </span>
+            </Typography>
             {state.user.mfaMethod === 'sms' && (
               <Typography sx={sxStyles.link} variant="body2">
                 <span style={{ color: '#1a237e', cursor: 'pointer', fontWeight: 600 }} onClick={resendMfaText}>
@@ -96,7 +123,7 @@ export default function LoginPage() {
             )}
             <Typography sx={sxStyles.link} variant="body2">
               <span style={{ color: '#1a237e', cursor: 'pointer', fontWeight: 600 }}
-                onClick={() => { setCode(''); cancelMfa(); }}>
+                onClick={() => { setCode(''); setUseRecovery(false); cancelMfa(); }}>
                 Back
               </span>
             </Typography>

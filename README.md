@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.13.6** (in both `package.json` and `client/package.json`, kept in sync).
+**Current version: 1.13.7** (in both `package.json` and `client/package.json`, kept in sync).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -381,7 +381,9 @@ Everything here is **off until you set it in `.env`**, so installing the release
 | `HIPAA_GATE=on` | turn the gate on |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Twilio console > Account info |
 | `TWILIO_VERIFY_SERVICE_SID` | Twilio console > Verify > Services > create one (starts `VA`) |
-| `MFA_KEY` | long random string; encrypts phone numbers and old authenticator secrets. Set once and keep it |
+| `MFA_KEY` | long random string; encrypts authenticator secrets and phone numbers (AES-256-GCM). Set once and keep it: if it changes, enrolled people must use a recovery code and enrol again |
+| `REDIS_URL` (optional) | e.g. `redis://127.0.0.1:6379`. Two-step state (one-time-code claims, lockouts, per-IP failed-attempt counter) lives in Redis and survives restarts; unset = in memory (a restart resets lockouts). The one-time rule also holds without Redis (MySQL `user_mfa.lastCounter`). `REDIS_PREFIX` (default `oe:mfa:`) |
+| `MFA_MAX_ATTEMPTS` / `MFA_LOCK_MINUTES` | 5 / 15: wrong codes before a person is locked, and for how long. `RATE_LIMIT_MFA_VERIFY_MAX` (default 20) = failed code attempts per IP per 15 min. `MFA_ISSUER` (default `OwenEnterprises`) = name shown in the authenticator app |
 | `PATIENT_PHOTOS=on` | turn on patient photos (see 1.13.0). `PHOTO_DIR` (optional) = where the files are kept, `PHOTO_MAX_PER_PATIENT` (optional, default 200) |
 | `PDF_DIR` (optional) | where Meetings reports and logos are kept (see 1.13.5). Default: a folder `pdf` in the folder ABOVE the app (IONOS: `/var/www/vhosts/owen-enterprises.net/pdf`, next to `patient-photos`). Never inside `client/public` |
 | `FORCE_HTTPS=on` | see above |
@@ -408,6 +410,13 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.13.7** — **Two-step sign-in with an authenticator app (6-digit TOTP)**, next to the text-message method. Packages added: `otplib`, `ioredis`, `qrcode`.
+- **Server:** `utils/totp.js` (otplib: 6 digits, 30 s, SHA-1, one step of clock drift; returns the matched time step), `utils/mfaCrypto.js` (AES-256-GCM, versioned, purpose-bound AAD; old ciphertext still decrypts), `utils/mfaStore.js` (Redis or memory: one-time claim of (user, time step), lockout, per-IP limiter store), `utils/mfaAudit.js` (JSON log line + `audit_log` row for every success / failure / lockout / enrolment / reset: time, user id, IP, method, reason; never a code or secret), `routes/mfa.js` (`/totp/start`, `/totp/confirm`, shared checks for sign-in and turning off), `middleware/rateLimits.js` (`mfaVerify`, failed attempts only), `server.js` (Redis connect at boot, clean shutdown), `db`: `user_mfa.pendingSecretEnc` (added to existing databases automatically).
+- **One-time rule, two layers:** Redis claim of (user, step) and an atomic MySQL `UPDATE ... WHERE lastCounter < step`. An older step after a newer one is refused too. A refused replay does not count toward lockouts.
+- **Client:** `components/mfa/OtpInput.tsx` (six squares over ONE real `<input type="text" inputmode="numeric" autocomplete="one-time-code">`; the 6th digit submits by itself), `TotpSetup.tsx` (QR + typed key + first code); `LoginPage.jsx` and `SecurityPage.jsx` use them (recovery code = plain text box).
+- **Tests:** `npm run check:totp` (63), `check:mfaredis` (18; starts its own redis-server, skipped without one), all in `npm run check` (19 suites). A headless-Chromium run of the login squares passed (12 checks; script not in the zip).
+- **Not verified:** a real authenticator app on a real phone, a real Android / iPhone SMS or password-manager autofill into the squares, Redis on IONOS (leave `REDIS_URL` unset there unless a Redis exists), Node 20 on the host (tested on Node 22).
 
 **1.13.6** — BG Tracker: **"What I ate" box after each Sugar; the foods are looked up on fatsecret, the person checks them, and the carbs fill the BG table and the meal fills the Nutrition table.** Switched on only when `FATSECRET_CLIENT_ID` and `FATSECRET_CLIENT_SECRET` are set; no new packages (Node's built-in `fetch`). Built and tested against a PRETEND fatsecret server, NOT the real one (see Not verified).
 - **Flow:** edit a reading row -> type the meal in "What I ate" (breakfast, lunch, dinner; shown only with Nutrition on at 3+ readings a day, and only for meals that have a Nutrition column) -> press the search icon or Enter -> `POST /bgtracker/foods/lookup/:user_id` -> a **check screen** lists every food found (change the match from a list, leave one out, edit the total carbs) -> **Use these numbers** puts the carbs in that meal's Carbs box and keeps the meal in the row's draft -> the row's tick saves the reading AND writes the meal (`POST /bgtracker/foods/apply/:user_id`) into the day's Nutrition row, only that meal's 18 columns. **Discard** throws all of it away. A lookup itself never saves anything. Nothing is filled in without the check screen, because the carbs feed the sliding-scale insulin dose (the screen says so when a carb ratio is set).

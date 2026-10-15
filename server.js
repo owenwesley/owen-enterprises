@@ -82,6 +82,10 @@ app.use(cors(
 if (!corsOrigins.length) {
   console.warn('WARNING: CORS is open to every origin. Set CORS_ORIGIN in .env to restrict it.');
 }
+const mfaStore = require('./utils/mfaStore');
+if (require('./utils/mfaCrypto').usingDefaultKey()) {
+  console.warn('WARNING: neither MFA_KEY nor JWT_SECRET is set, so authenticator secrets are encrypted with a public default key. Set a long random MFA_KEY.');
+}
 if (!process.env.JWT_SECRET) {
   console.warn('WARNING: JWT_SECRET is not set, so tokens are signed with a public default secret. ' +
     'Set a long random JWT_SECRET in .env (run: npm run secret). Existing sessions will need to sign in again.');
@@ -120,7 +124,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use('/auth/signin', limits.signin);
 app.use('/auth/signup', limits.signup);
 app.use('/auth/mfa/send', limits.mfa);
-app.use('/auth/mfa/verify', limits.mfa);
+app.use('/auth/mfa/verify', limits.mfaVerify);
 app.use('/auth/mfa', require('./routes/mfa'));
 app.use('/auth', require('./routes/auth'));
 
@@ -227,9 +231,18 @@ initDatabases()
   // throws — it logs and carries on.
   .then(() => backfillInviteCodes())
   .then(() => {
-    app.listen(port, () =>
+    // Two-step sign-in state (one-time-code claims, lockouts, per-IP limit): Redis when REDIS_URL is set.
+    mfaStore.init();
+    const httpServer = app.listen(port, () =>
       console.log(`OwenEnterprises server running on port ${port}`)
     );
+    // Close the HTTP server and the Redis connection cleanly on a restart / stop.
+    const shutdown = () => {
+      httpServer.close(() => mfaStore.close().finally(() => process.exit(0)));
+      setTimeout(() => process.exit(0), 5000).unref();
+    };
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
     // Rolling 10-year retention (readings only): prune now, then re-check
     // every 24h so the sweep fires on its own whenever the calendar rolls
     // into a new year (e.g. entering 2027 deletes any 2017-and-earlier
