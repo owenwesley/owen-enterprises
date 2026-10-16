@@ -11,8 +11,9 @@
  *   rateLimitStore(name)          a store for express-rate-limit (per-IP limit on the verify route)
  *
  * With Redis the state survives an app restart (the weekly rebuild, a Plesk restart) and is
- * shared by several app processes. Without it, state lives in memory: a restart gives an
- * attacker a fresh set of attempts, and each process counts on its own.
+ * shared by several app processes. Without Redis the LOCKOUT counters live in MySQL (table
+ * mfa_lockout, 1.13.8), so they also survive a restart and are shared by every process.
+ * Only if MySQL itself cannot be reached does a call fall back to this process's memory.
  *
  * If Redis is configured but down, every call falls back to memory for that call and says so in
  * the log (throttled): sign-in keeps working and still has limits, just per process.
@@ -87,7 +88,16 @@ async function withRedis(fn, fallback) {
   return fallback();
 }
 
-const mode = () => (redis() ? 'redis' : 'memory');
+const mode = () => (redis() ? 'redis' : 'mysql');
+
+// ── MySQL (the lockout store when there is no Redis) ─────────────────────────
+const dbp = () => require('../db/db').owenenterprises.promise();
+
+/** Runs sql(promisePool); on any MySQL error logs once a minute and runs the memory version instead. */
+async function withDb(sql, fallback) {
+  try { return await sql(dbp()); }
+  catch (e) { logOnce(`MySQL lockout store failed: ${e.message} (using memory)`); return fallback(); }
+}
 
 /** Start connecting now (server.js calls this at boot). Does nothing without REDIS_URL. */
 const init = () => { redis(); };
@@ -126,7 +136,10 @@ const lockKey = (userId) => `${prefix()}lock:${userId}`;
 function lockRemainingMs(userId) {
   return withRedis(
     async (r) => Math.max(0, await r.pttl(lockKey(userId))),     // -2 no key, -1 no expiry: both -> 0 / never
-    () => Math.max(0, (mem.locks.get(String(userId)) || 0) - Date.now()));
+    () => withDb(async (db) => {
+      const [rows] = await db.query('SELECT lockedUntil FROM mfa_lockout WHERE user_id=?', [userId]);
+      return Math.max(0, (rows && rows[0] ? Number(rows[0].lockedUntil) : 0) - Date.now());
+    }, () => Math.max(0, (mem.locks.get(String(userId)) || 0) - Date.now())));
 }
 
 /** Records one wrong code. Returns { count, locked } (locked = this failure reached the limit). */
@@ -138,24 +151,41 @@ function recordFailure(userId) {
         FAIL_WINDOW_MS(), max, LOCK_MS());
       return { count, locked: locked === 1 };
     },
-    () => {
-      const id = String(userId), now = Date.now();
-      let f = mem.fails.get(id);
-      if (!f || f.until <= now) f = { n: 0, until: now + FAIL_WINDOW_MS() };
-      f.n += 1;
-      mem.fails.set(id, f);
-      sweep(mem.fails);
-      const locked = f.n >= max;
-      if (locked) mem.locks.set(id, now + LOCK_MS());
-      return { count: f.n, locked };
-    });
+    () => withDb(async (db) => {
+      // One atomic upsert. MySQL/MariaDB apply the SET list left to right, so failCount and windowEnd are
+      // already updated when lockedUntil is worked out.
+      const now = Date.now();
+      await db.query(
+        `INSERT INTO mfa_lockout (user_id, failCount, windowEnd, lockedUntil) VALUES (?, 1, ?, 0)
+         ON DUPLICATE KEY UPDATE
+           failCount   = IF(windowEnd <= ?, 1, failCount + 1),
+           windowEnd   = IF(windowEnd <= ?, ?, windowEnd),
+           lockedUntil = IF(failCount >= ?, ?, lockedUntil)`,
+        [userId, now + FAIL_WINDOW_MS(), now, now, now + FAIL_WINDOW_MS(), max, now + LOCK_MS()]);
+      const [rows] = await db.query('SELECT failCount FROM mfa_lockout WHERE user_id=?', [userId]);
+      const count = rows && rows[0] ? Number(rows[0].failCount) : 1;
+      return { count, locked: count >= max };
+    }, () => memFailure(userId, max)));
+}
+
+function memFailure(userId, max) {
+  const id = String(userId), now = Date.now();
+  let f = mem.fails.get(id);
+  if (!f || f.until <= now) f = { n: 0, until: now + FAIL_WINDOW_MS() };
+  f.n += 1;
+  mem.fails.set(id, f);
+  sweep(mem.fails);
+  const locked = f.n >= max;
+  if (locked) mem.locks.set(id, now + LOCK_MS());
+  return { count: f.n, locked };
 }
 
 /** After a correct code: forget the failures (and any lock, which a correct code cannot reach anyway). */
 function clearFailures(userId) {
   return withRedis(
     (r) => r.del(failKey(userId), lockKey(userId)),
-    () => { mem.fails.delete(String(userId)); mem.locks.delete(String(userId)); });
+    () => withDb((db) => db.query('DELETE FROM mfa_lockout WHERE user_id=?', [userId]),
+      () => {}).then(() => { mem.fails.delete(String(userId)); mem.locks.delete(String(userId)); }));
 }
 
 // ── express-rate-limit store ─────────────────────────────────────────────────

@@ -121,6 +121,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // ── POST /auth/signin — log in, returns token + user ─────────────────────────
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 router.post('/signin', async (req, res) => {
   const { userName, password } = req.body;
 
@@ -130,12 +131,16 @@ router.post('/signin', async (req, res) => {
 
   try {
     const rows = await query(selectUser + ' WHERE userName=?', [userName]);
+    // One message for both cases so the form cannot be used to find out which usernames exist (1.13.8).
+    // A dummy hash is compared when the user is missing so both cases take about as long.
+    const BAD = 'Username or password is not right';
     if (!rows || rows.length === 0) {
-      return res.status(400).json({ error: 'User not found' });
+      await bcrypt.compare(String(password), DUMMY_HASH);
+      return res.status(400).json({ error: BAD });
     }
 
     const match = await bcrypt.compare(password, rows[0].password);
-    if (!match) return res.status(400).json({ error: 'Incorrect password' });
+    if (!match) return res.status(400).json({ error: BAD });
 
     const { password: _pw, ...safeUser } = rows[0];
 

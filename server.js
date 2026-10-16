@@ -86,6 +86,12 @@ const mfaStore = require('./utils/mfaStore');
 if (require('./utils/mfaCrypto').usingDefaultKey()) {
   console.warn('WARNING: neither MFA_KEY nor JWT_SECRET is set, so authenticator secrets are encrypted with a public default key. Set a long random MFA_KEY.');
 }
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.MFA_KEY) console.warn('WARNING: MFA_KEY is not set, so authenticator secrets are encrypted with a key made from JWT_SECRET and rotating JWT_SECRET would make them unreadable. Set a long random MFA_KEY once, before anyone enrols.');
+  if (!process.env.TRUST_PROXY && !require('./middleware/forceHttps').isOn()) {
+    console.warn('WARNING: TRUST_PROXY is not set. Behind IONOS/Plesk every visitor then looks like one address, so the per-address limits (sign-in, codes) would count the whole site together. Set TRUST_PROXY=1.');
+  }
+}
 if (!process.env.JWT_SECRET) {
   console.warn('WARNING: JWT_SECRET is not set, so tokens are signed with a public default secret. ' +
     'Set a long random JWT_SECRET in .env (run: npm run secret). Existing sessions will need to sign in again.');

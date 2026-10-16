@@ -36,6 +36,7 @@ const SUITES = [
   { name: 'hipaa',     file: 'hipaa-gate.js',              server: 'hipaa' },
   { name: 'mfa',       file: 'mfa.js',                     server: 'hipaa' },
   { name: 'totp',      file: 'totp.js',                    server: 'hipaa' },
+  { name: 'mfalockout', file: 'mfa-lockout.js',           server: 'plain' },
   { name: 'mfaredis',  file: 'mfa-redis.js',               server: null },
   { name: 'twilio',    file: 'twilio-request.js',          server: null },
   { name: 'hardening', file: 'hardening.js',               server: null },

@@ -258,6 +258,16 @@ function tableMap(names) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {
+        // Wrong-code counters and lockouts when there is no Redis (1.13.8). Times are milliseconds since 1970.
+        name: 'mfa_lockout',
+        sql: `CREATE TABLE IF NOT EXISTS mfa_lockout (
+          user_id     INT    PRIMARY KEY,
+          failCount   INT    NOT NULL DEFAULT 0,
+          windowEnd   BIGINT NOT NULL DEFAULT 0,
+          lockedUntil BIGINT NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      },
+      {
         // Phones we agreed not to ask again on. Only a hash of the device token is
         // kept; the token itself lives in that browser. Lasts 30 days.
         name: 'mfa_trusted_devices',

@@ -10,7 +10,7 @@ Three small web apps that share one login, one server and one React front end:
 
 Each user chooses which of the three apps they see (gear icon → feature preferences).
 
-**Current version: 1.13.7** (in both `package.json` and `client/package.json`, kept in sync).
+**Current version: 1.13.8** (in both `package.json` and `client/package.json`, kept in sync).
 BGTracker was last released standalone as 1.3.27; Community Library and Meetings were each at 1.0.0. 1.4.0 is the first release of the three as one project.
 
 ---
@@ -410,6 +410,14 @@ Please read these before putting real users' data on it.
 ---
 
 ## Version history
+
+**1.13.8** — **Hardening of two-step sign-in** (no new packages; one new table, `mfa_lockout`, created automatically).
+- **Lockout without Redis:** wrong-code counters and the 15-minute lock are now kept in MySQL (`mfa_lockout`, one atomic upsert) when `REDIS_URL` is unset, so a Plesk restart or the weekly rebuild no longer gives an attacker fresh guesses and every app process shares the count. Memory is used only if MySQL itself cannot be reached. Redis, when set, still takes priority.
+- **Half-finished sign-in token:** `middleware/auth.js` now refuses any token that carries a `purpose` (the 10-minute `mfaToken`) as a session, instead of relying on it having no `userName`.
+- **Sign-in message:** an unknown username and a wrong password now both answer "Username or password is not right" (a dummy bcrypt compare keeps the timing alike), so the form cannot be used to list usernames.
+- **Startup warnings (production):** `MFA_KEY` not set; `TRUST_PROXY` not set (every visitor would share one address in the per-address limits).
+- **Tests:** `npm run check:mfalockout` (10 checks), added to `npm run check` (20 suites).
+- **Set up in this order on IONOS:** 1) `TRUST_PROXY=1`; 2) a long random `MFA_KEY`, once, before anyone enrols (nobody is enrolled yet, so nothing needs re-encrypting); 3) only then rotate `JWT_SECRET`.
 
 **1.13.7** — **Two-step sign-in with an authenticator app (6-digit TOTP)**, next to the text-message method. Packages added: `otplib`, `ioredis`, `qrcode`.
 - **Server:** `utils/totp.js` (otplib: 6 digits, 30 s, SHA-1, one step of clock drift; returns the matched time step), `utils/mfaCrypto.js` (AES-256-GCM, versioned, purpose-bound AAD; old ciphertext still decrypts), `utils/mfaStore.js` (Redis or memory: one-time claim of (user, time step), lockout, per-IP limiter store), `utils/mfaAudit.js` (JSON log line + `audit_log` row for every success / failure / lockout / enrolment / reset: time, user id, IP, method, reason; never a code or secret), `routes/mfa.js` (`/totp/start`, `/totp/confirm`, shared checks for sign-in and turning off), `middleware/rateLimits.js` (`mfaVerify`, failed attempts only), `server.js` (Redis connect at boot, clean shutdown), `db`: `user_mfa.pendingSecretEnc` (added to existing databases automatically).

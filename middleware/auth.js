@@ -28,6 +28,11 @@ module.exports = function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Token invalid or expired' });
   }
 
+  // The 10-minute token handed out between password and code (routes/auth.js) is not a session.
+  if (payload.purpose) {
+    return res.status(401).json({ error: 'Token invalid or expired' });
+  }
+
   db.query(
     'SELECT 1 FROM users WHERE id = ? AND userName = ? LIMIT 1',
     [payload.id, payload.userName],
