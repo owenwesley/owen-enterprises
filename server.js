@@ -2,7 +2,16 @@
 // before db/db.js would have loaded .env — so a secret kept only in .env was ignored by
 // the verifier (tokens signed with one secret, checked against the built-in fallback,
 // and every authenticated request answered 401).
-require('dotenv').config();
+// 1.13.9: settings are read from a private file OUTSIDE the web folder first (default: a folder named "private"
+// next to httpdocs, i.e. <domain>/private/.env, or the file named by ENV_FILE). Variables already set in the Plesk
+// panel always win (dotenv never overrides), so a value that is in both places uses the panel's. A .env inside
+// the app folder is still read last, for local development. Missing files are skipped silently.
+{
+  const _path = require('path');
+  const _file = process.env.ENV_FILE || _path.resolve(__dirname, '..', 'private', '.env');
+  require('dotenv').config({ path: _file, quiet: true });
+}
+require('dotenv').config({ quiet: true });
 
 const express      = require('express');
 const helmet       = require('helmet');

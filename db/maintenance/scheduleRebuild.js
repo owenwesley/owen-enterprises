@@ -124,6 +124,7 @@ async function discoverTables(pool) {
       WHERE c.COLUMN_NAME = 'id'
         AND t.TABLE_TYPE = 'BASE TABLE'
         AND c.TABLE_SCHEMA IN (?)
+        AND c.TABLE_NAME <> 'audit_log'   -- 1.13.9: the audit trail is never renumbered (kept 6 years)
         AND c.TABLE_NAME NOT LIKE '%\\_rebuild\\_tmp'
         AND c.TABLE_NAME NOT LIKE '%\\_rebuild\\_old'
         AND c.TABLE_NAME NOT LIKE '%\\_rebuild\\_map'

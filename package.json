@@ -1,6 +1,6 @@
 {
   "name": "owenenterprises-server",
-  "version": "1.13.8",
+  "version": "1.13.9",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -25,6 +25,7 @@
     "check:totp": "node tests/totp.js",
     "check:mfaredis": "node tests/mfa-redis.js",
     "check:mfalockout": "node tests/mfa-lockout.js",
+    "check:env": "node tests/env-loader.js",
     "check:twilio": "node tests/twilio-request.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "secret": "node scripts/genSecret.js",

@@ -195,7 +195,10 @@ router.post('/send', async (req, res) => {
     const fail = await textCode(payload.id, row, req.ip);
     if (fail) return res.status(fail[0]).json({ error: fail[1] });
     return res.json({ sent: true, method: 'sms', phoneHint: row.phoneLast4 });
-  } catch (e) { return res.status(500).json({ error: 'Could not send the code.' }); }
+  } catch (e) {
+    console.error('[mfa] send failed:', e && e.message);   // 1.13.9: the reason goes to the server log only
+    return res.status(500).json({ error: 'Could not send the code.' });
+  }
 });
 
 router.post('/verify', async (req, res) => {

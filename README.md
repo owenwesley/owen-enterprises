@@ -35,6 +35,13 @@ BGTracker was last released standalone as 1.3.27; Community Library and Meetings
 
 ---
 
+## 1.13.9 changes
+
+- **Settings file outside the web folder.** The app reads `<domain>/private/.env` (a `private` folder next to `httpdocs`) or the file named by `ENV_FILE`, then any `.env` in the app folder. Variables set in the Plesk panel always win; to change one that is in both places, remove it from the panel. Restart after editing. Quote values containing `#`. Set the file to permissions 600.
+- **Audit trail kept.** The weekly table rebuild (`MAINTENANCE_REBUILD_ENABLED`) no longer touches `audit_log`, so its ids are never renumbered. Other tables' rebuilds still remap `audit_log.user_id` / `patient_id`. NOT changed: deleting an account still deletes that person's audit rows (`db/maintenance/deleteUser.js`, and the consent forms say so). Decide with your compliance advisor whether the 6-year retention overrides that; changing it means editing the forms and raising their `version`.
+- **Real error in the log.** When sending a sign-in code fails with a 500, the reason is now written to the server log (`[mfa] send failed: ...`). Users still see only a generic message.
+- New check: `npm run check:env`.
+
 ## Quick start
 
 **You need:** Node.js 20.9 or newer (required by `sharp`), and a MySQL-compatible server (MySQL or MariaDB). It was developed against MySQL and last exercised on Node 22 + MariaDB 10.11. The database user needs permission to `CREATE DATABASE` — the four databases and every table are created automatically on first start.
