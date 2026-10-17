@@ -240,7 +240,8 @@ async function main() {
     section('Delete');
     r = await api('DELETE', `/patient-photos/${photo.id}`, { token: P.token });
     check('patient deletes the photo', r.status === 200);
-    check('both files are gone from disk', !fs.existsSync(files.full) && !fs.existsSync(files.thumb));
+    check('both files are gone from disk', !fs.existsSync(files.full) && !fs.existsSync(files.thumb),
+      `full ${fs.existsSync(files.full) ? 'STILL THERE' : 'gone'}, thumb ${fs.existsSync(files.thumb) ? 'STILL THERE' : 'gone'}; folder ${PHOTO_DIR}; platform ${process.platform}; uid ${process.getuid ? process.getuid() : 'n/a'}; run "node scripts/photoDeleteDiag.js" and read the server log for "[photos] could not delete"`);
     const left = await q(dbs.owenenterprises, 'SELECT (SELECT COUNT(*) FROM patient_photos WHERE id=?) p, (SELECT COUNT(*) FROM patient_photo_notes WHERE photo_id=?) n', [photo.id, photo.id]);
     check('the row and its notes are gone', Number(left[0].p) === 0 && Number(left[0].n) === 0);
     r = await api('GET', `/patient-photos/${photo.id}/file`, { token: P.token });
