@@ -6,11 +6,12 @@ const {
   upsertFeaturePreference,
 } = require('../../db/sql/owenenterprises/featurePreferences');
 const { serverError } = require('../../utils/serverError');
+const { defaultFeaturePrefs } = require('../../utils/featureDefaults');
 const router = express.Router();
 
 // GET /owenenterprises/features/:user_id
 // Returns which features are enabled for this user.
-// Auto-creates a row with all features enabled (1) if none exists yet.
+// Auto-creates a row with the signup defaults (utils/featureDefaults.js) if none exists yet.
 router.get('/:user_id', async (req, res) => {
   const user_id = req.params.user_id;
   try {
@@ -20,11 +21,15 @@ router.get('/:user_id', async (req, res) => {
       return res.json({ results: results[0] });
     }
 
-    // First-time user — create a row with all features enabled
-    await owenenterprises.promise().query(upsertFeaturePreference, [user_id, 1, 1, 1, 0]);
-    return res.json({
-      results: { user_id, chkBgtracker: 1, chkCommunityLibrary: 1, chkMeetings: 1, chkChurch: 0 },
-    });
+    // No row yet (signup normally creates it) — create it with the same defaults
+    // signup uses: BG Tracker off for an ordinary account, on for a doctor.
+    const [u] = await owenenterprises.promise().query('SELECT role FROM users WHERE id=?', [user_id]);
+    const f = defaultFeaturePrefs(u && u[0] ? u[0].role : 'patient');
+    await owenenterprises.promise().query(
+      upsertFeaturePreference,
+      [user_id, f.chkBgtracker, f.chkCommunityLibrary, f.chkMeetings, f.chkChurch]
+    );
+    return res.json({ results: { user_id, ...f } });
   } catch (err) {
     return serverError(res, err);
   }

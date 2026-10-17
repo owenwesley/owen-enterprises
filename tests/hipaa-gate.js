@@ -62,6 +62,13 @@ async function main() {
     await q(dbs.owenenterprises, "UPDATE users SET doctorStatus='approved' WHERE id=?", [D.id]);
     await q(dbs.owenenterprises, "INSERT INTO doctor_patients (doctor_id, patient_id, status) VALUES (?,?, 'active')", [D.id, P.id]);
 
+    section('Signup defaults: not everyone is a patient');
+    const fx = async (u) => (await api('GET', `/owenenterprises/features/${u.id}`, { token: u.token })).json.results || {};
+    const fp = await fx(P), fd = await fx(D);
+    check('ordinary sign-up: BG Tracker starts OFF', Number(fp.chkBgtracker) === 0, JSON.stringify(fp));
+    check('ordinary sign-up: Library and Meetings on, Church off', Number(fp.chkCommunityLibrary) === 1 && Number(fp.chkMeetings) === 1 && Number(fp.chkChurch) === 0, JSON.stringify(fp));
+    check('doctor sign-up: BG Tracker starts ON (the gate checks the doctor too)', Number(fd.chkBgtracker) === 1, JSON.stringify(fd));
+
     if (MODE === 'off') {
       section('Gate off: pass-through');
       await setFlag(P, false);
@@ -82,9 +89,15 @@ async function main() {
     r = await api('GET', `/hipaa/status/${P.id}`, { token: P.token });
     check('status says disabled, nothing missing', r.json.results && r.json.results.bgtrackerEnabled === false && r.json.results.missing.length === 0);
     check('nothing logged while the flag is off', (await audits(P.id)).length === 0);
+    r = await api('POST', '/patient-doctors/link', { token: P.token, body: { inviteCode: 'NOSUCHCD' } });
+    check('flag off: cannot link a doctor (403 BGTRACKER_DISABLED)', r.status === 403 && r.json.code === 'BGTRACKER_DISABLED', JSON.stringify(r));
+    r = await api('GET', '/patient-doctors', { token: P.token });
+    check('flag off: can still list links (so they can be ended)', r.status === 200, String(r.status));
 
     section('Flag on, no consent yet');
     await setFlag(P, true);
+    r = await api('POST', '/patient-doctors/link', { token: P.token, body: { inviteCode: 'NOSUCHCD' } });
+    check('flag on: link reaches the code check (400, not 403)', r.status === 400, JSON.stringify(r));
     r = await api('GET', `/bgtracker/readings/${P.id}`, { token: P.token });
     check('readings 403 (MFA_REQUIRED, not yet enrolled)', r.status === 403 && r.json.code === 'MFA_REQUIRED', JSON.stringify(r));
     let a = await audits(P.id);

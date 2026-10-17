@@ -45,6 +45,13 @@ router.post('/link', async (req, res) => {
 
   try {
     const conn = db.promise();
+    // Only someone using BG Tracker (a "patient", not a "member") can link a doctor.
+    // Read from the database every time. Listing, sharing choices and revoking stay open
+    // so a person who switches BG Tracker off can still see and end their links.
+    const [flag] = await conn.query('SELECT chkBgtracker FROM feature_preferences WHERE user_id=?', [req.user.id]);
+    if (!flag || !flag[0] || Number(flag[0].chkBgtracker) !== 1) {
+      return res.status(403).json({ error: 'Turn on BG Tracker in Feature Preferences to link a doctor', code: 'BGTRACKER_DISABLED' });
+    }
     const [rows] = await conn.query(
       `SELECT u.id AS doctor_id FROM doctor_profiles p
          JOIN users u ON u.id = p.user_id

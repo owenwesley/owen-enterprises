@@ -35,6 +35,14 @@ BGTracker was last released standalone as 1.3.27; Community Library and Meetings
 
 ---
 
+## 1.13.10 changes — members and patients
+
+- Not everyone is a patient. A new ordinary account now starts with **BG Tracker off** (Library and Meetings on, Church off), so it is a "member" and the HIPAA gate, consent forms and audit logging do not apply until the person switches BG Tracker on in Feature Preferences. A **doctor** account still starts with it on (the gate checks the doctor's flag too). Defaults live in `utils/featureDefaults.js`; signup and the first `GET /owenenterprises/features/:id` both use them. The client default in `AppContext.jsx` matches, so the front end needs the rebuilt `client/build`.
+- Existing accounts are not changed.
+- `users.role` is unchanged (still `patient` for ordinary sign-ups); "member" is only the label shown while BG Tracker is off.
+- **Linking a doctor needs BG Tracker on.** `POST /patient-doctors/link` returns 403 `BGTRACKER_DISABLED` otherwise (read from the database each time). Listing links, sharing choices and revoking stay open so someone who switches BG Tracker off can still end their links.
+- `tests/hipaa-gate.js` gained a "Signup defaults" check and link checks. Not run here (no database in the sandbox): run `npm run check:hipaa` against your own database.
+
 ## 1.13.9 changes
 
 - **Settings file outside the web folder.** The app reads `<domain>/private/.env` (a `private` folder next to `httpdocs`) or the file named by `ENV_FILE`, then any `.env` in the app folder. Variables set in the Plesk panel always win; to change one that is in both places, remove it from the panel. Restart after editing. Quote values containing `#`. Set the file to permissions 600.

@@ -10,6 +10,7 @@ const authMiddleware = require('../middleware/auth');
 const { genCode: genInviteCode } = require('../db/backfillInviteCodes');
 const deleteUser = require('../db/maintenance/deleteUser');
 const { serverError } = require('../utils/serverError');
+const { defaultFeaturePrefs } = require('../utils/featureDefaults');
 
 const router = express.Router();
 const SECRET = process.env.JWT_SECRET || 'owenenterprises_secret_change_in_prod';
@@ -89,16 +90,17 @@ router.post('/signup', async (req, res) => {
     }
     await conn.commit();
 
-    // Auto-create feature_preferences with all features enabled. Fire-and-forget
-    // is intentional (a missing preferences row just means the client sees the
-    // InitialState default of "everything on" until it's created), but still
-    // awaited so the error, if any, is logged in order rather than racing the
-    // response below.
+    // Auto-create feature_preferences. BG Tracker starts OFF for an ordinary
+    // sign-up (they are a "member" until they switch it on); a doctor starts with
+    // it on (see utils/featureDefaults.js). Awaited so an error is logged in order
+    // rather than racing the response below; a missing row is treated as "off" by
+    // the HIPAA gate and is re-created with these same defaults on the first GET.
     try {
+      const f = defaultFeaturePrefs(isDoctor ? 'doctor' : 'patient');
       await query(
-        'INSERT IGNORE INTO feature_preferences (user_id, chkBgtracker, chkCommunityLibrary, chkMeetings) ' +
-        'VALUES (?, 1, 1, 1)',
-        [ins.insertId]
+        'INSERT IGNORE INTO feature_preferences (user_id, chkBgtracker, chkCommunityLibrary, chkMeetings, chkChurch) ' +
+        'VALUES (?, ?, ?, ?, ?)',
+        [ins.insertId, f.chkBgtracker, f.chkCommunityLibrary, f.chkMeetings, f.chkChurch]
       );
     } catch (prefErr) {
       console.error('feature_preferences insert failed:', prefErr.message);
