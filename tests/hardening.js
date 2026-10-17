@@ -73,7 +73,7 @@ async function main() {
   check('serverError passes through a deliberately exposed message', r2.code === 500 && r2.body.error === 'Pick another code');
 
   section('Headers, bad JSON, rate limits (test server on :4101, tiny limits)');
-  const S = await startServer(4101, { RATE_LIMIT_SIGNIN_MAX: '3', RATE_LIMIT_SIGNUP_MAX: '3', RATE_LIMIT_MFA_MAX: '2', RATE_LIMIT_BORROW_MAX: '2' });
+  const S = await startServer(4101, { FORCE_HTTPS: 'off', RATE_LIMIT_SIGNIN_MAX: '3', RATE_LIMIT_SIGNUP_MAX: '3', RATE_LIMIT_MFA_MAX: '2', RATE_LIMIT_BORROW_MAX: '2' });
   try {
     if (!S.started) throw new Error('test server did not start:\n' + S.out.slice(-600));
     const base = 'http://localhost:4101';

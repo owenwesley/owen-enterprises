@@ -79,11 +79,22 @@ async function saveImage(buffer) {
   return fileKey;
 }
 
-/** Delete both files of a photo. Missing files are fine; never throws. */
+/**
+ * Delete both files of a photo. A missing file is fine and this never throws. Any OTHER failure (permission,
+ * a file another process still has open) is retried a few times and then written to the server log, because
+ * a photo that stays on disk after the person deleted it is health information that should be gone.
+ */
 async function removeFiles(fileKey) {
   if (!validKey(fileKey)) return;
   for (const size of ['full', 'thumb']) {
-    try { await fs.promises.unlink(filePath(fileKey, size)); } catch { /* already gone */ }
+    const target = filePath(fileKey, size);
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try { await fs.promises.unlink(target); break; } catch (e) {
+        if (e && e.code === 'ENOENT') break; // already gone
+        if (attempt === 4) { console.error(`[photos] could not delete ${path.basename(target)}: ${e && e.code ? e.code : e}`); break; }
+        await new Promise((r) => setTimeout(r, 100 * attempt));
+      }
+    }
   }
 }
 
