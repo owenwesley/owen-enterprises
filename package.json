@@ -27,6 +27,7 @@
     "check:mfalockout": "node tests/mfa-lockout.js",
     "check:env": "node tests/env-loader.js",
     "check:schema": "node tests/schema-parse.js",
+    "check:routes": "node tests/route-layout.js",
     "check:twilio": "node tests/twilio-request.js",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "secret": "node scripts/genSecret.js",

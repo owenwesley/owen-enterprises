@@ -35,6 +35,14 @@ BGTracker was last released standalone as 1.3.27; Community Library and Meetings
 
 ---
 
+## Unreleased: routes split (no behavior change)
+
+- **`routes/church.js`** (769 lines) is now an index plus `routes/church/<area>.js`, one file per operation where an area has several (the same layout as `routes/bgtracker` and `routes/communitylibrary`). Shared bits (`clean`, `bad`, `notFound`, `asFlag`, the display-name lookup that was pasted five times, the film list of a movie row) are in `routes/church/_helpers.js`. The fixed paths (`mine`, `create`, `join`, `shared-library`, `contacts`, `borrow`, `borrow-count`) are mounted before `/:church_id/...` so they can never be read as a church id; keep it that way when adding routes.
+- **`routes/meetings/{meetings,chairs,memos}.js`** now mount `add` / `edit` / `delete` files like BG Tracker. The 24-value list that add and edit both saved is in `routes/meetings/meetings/_fields.js` (`meetingValues`). `reports.js` and the order of the mounts in `routes/meetings.js` are unchanged.
+- URLs, permissions, SQL and responses are unchanged. Checked by replaying 178 requests (80 church in two database states, 18 meetings) against the old and the new code with a recording fake database: identical statuses, bodies, SQL and parameters. New `npm run check:routes` (no server, no database) checks every route is wired and every in-church route still answers 403 to a non-member; it is part of `npm run check`.
+
+---
+
 ## 1.13.11 changes — everything off, choose on first sign-in
 
 - **A new ordinary account starts with every feature OFF** (BG Tracker, Library, Meetings, Church). The first time it signs in it is taken to Feature Access ("Welcome! What would you like to use?") with **Save and continue** and **Skip for now**; either one ends the prompt. It only fires from the home page, so nobody is trapped. Until BG Tracker is on, nothing about it is shown and no HIPAA gate, consent or audit applies. A **doctor** still starts with BG Tracker, Library and Meetings on and is never prompted.
@@ -152,7 +160,8 @@ owenenterprises/                 ← project root = the Node/Express server
 │   ├── bgtracker/               readings, bloodpressures, weights, medications,
 │   │                            nutritions, preferences   (one file per operation)
 │   ├── communitylibrary/        books, movies, contacts, upload
-│   ├── meetings/                meetings, chairs, memos
+│   ├── church.js + church/      index + one file per area; members/, announcements/, library/, borrow/ have one file per operation; _helpers.js is shared
+│   ├── meetings/                meetings/, chairs/, memos/ (one file per operation, like bgtracker), reports.js
 │   └── owenenterprises/         featurePreferences
 ├── tests/
 │   ├── run-all.js               runs every suite below in one go (npm run check)
