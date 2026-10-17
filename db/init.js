@@ -182,7 +182,10 @@ function tableMap(names) {
           chkBgtracker        TINYINT(1) NOT NULL DEFAULT 0,
           chkCommunityLibrary TINYINT(1) NOT NULL DEFAULT 0,
           chkMeetings         TINYINT(1) NOT NULL DEFAULT 0,
-          chkChurch           TINYINT(1) NOT NULL DEFAULT 0
+          chkChurch           TINYINT(1) NOT NULL DEFAULT 0,
+          -- 0 = new account that has not yet saved Feature access (it is sent there once).
+          -- DEFAULT 1 on purpose: rows that already exist count as chosen; signup writes 0.
+          featuresChosen      TINYINT(1) NOT NULL DEFAULT 1
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       },
       {

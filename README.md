@@ -35,6 +35,15 @@ BGTracker was last released standalone as 1.3.27; Community Library and Meetings
 
 ---
 
+## 1.13.11 changes — everything off, choose on first sign-in
+
+- **A new ordinary account starts with every feature OFF** (BG Tracker, Library, Meetings, Church). The first time it signs in it is taken to Feature Access ("Welcome! What would you like to use?") with **Save and continue** and **Skip for now**; either one ends the prompt. It only fires from the home page, so nobody is trapped. Until BG Tracker is on, nothing about it is shown and no HIPAA gate, consent or audit applies. A **doctor** still starts with BG Tracker, Library and Meetings on and is never prompted.
+- **New column `feature_preferences.featuresChosen`** (0 = new account that has not saved Feature Access, 1 = has). It is added automatically at startup by `db/schemaSync.js`. Its column default is **1**, so every existing account counts as already chosen and nobody existing is redirected; only signup and the first GET write 0.
+- **Saving Feature Access:** a field the request leaves out keeps its stored value (before, a missing `chkBgtracker` meant ON), and any save sets `featuresChosen=1`. The old "at least one feature must stay on" rule is gone (client and nothing on the server enforced it).
+- The client shows "Nothing is turned on yet" with a Choose features button on the home page when nothing is on. Turning BG Tracker on shows a note about two-step sign-in and consent. Rebuilt `client/build`: replace the whole folder.
+- Server does not enforce the Library / Meetings / Church flags (the client hides them); only BG Tracker is enforced (by the HIPAA gate).
+- Tests: `tests/hipaa-gate.js` "Signup defaults" section updated and extended. Not run against a database here; the new route was exercised against a fake database (6 checks passed). Run `npm run check:hipaa` and `npm run check`.
+
 ## 1.13.10 changes — members and patients
 
 - Not everyone is a patient. A new ordinary account now starts with **BG Tracker off** (Library and Meetings on, Church off), so it is a "member" and the HIPAA gate, consent forms and audit logging do not apply until the person switches BG Tracker on in Feature Preferences. A **doctor** account still starts with it on (the gate checks the doctor's flag too). Defaults live in `utils/featureDefaults.js`; signup and the first `GET /owenenterprises/features/:id` both use them. The client default in `AppContext.jsx` matches, so the front end needs the rebuilt `client/build`.

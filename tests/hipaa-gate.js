@@ -66,8 +66,21 @@ async function main() {
     const fx = async (u) => (await api('GET', `/owenenterprises/features/${u.id}`, { token: u.token })).json.results || {};
     const fp = await fx(P), fd = await fx(D);
     check('ordinary sign-up: BG Tracker starts OFF', Number(fp.chkBgtracker) === 0, JSON.stringify(fp));
-    check('ordinary sign-up: Library and Meetings on, Church off', Number(fp.chkCommunityLibrary) === 1 && Number(fp.chkMeetings) === 1 && Number(fp.chkChurch) === 0, JSON.stringify(fp));
+    check('ordinary sign-up: EVERYTHING starts off (Library, Meetings, Church too)', Number(fp.chkCommunityLibrary) === 0 && Number(fp.chkMeetings) === 0 && Number(fp.chkChurch) === 0, JSON.stringify(fp));
+    check('ordinary sign-up: featuresChosen 0 (sent to Feature access once)', Number(fp.featuresChosen) === 0, JSON.stringify(fp));
     check('doctor sign-up: BG Tracker starts ON (the gate checks the doctor too)', Number(fd.chkBgtracker) === 1, JSON.stringify(fd));
+    check('doctor sign-up: featuresChosen 1 (no first-sign-in prompt)', Number(fd.featuresChosen) === 1, JSON.stringify(fd));
+    let sv = await api('POST', `/owenenterprises/features/edit/${P.id}`, { token: P.token, body: { chkChurch: 1 } });
+    let fr = await fx(P);
+    check('a partial save never switches BG Tracker on', sv.status === 200 && Number(fr.chkBgtracker) === 0 && Number(fr.chkChurch) === 1, JSON.stringify(fr));
+    check('any save sets featuresChosen to 1', Number(fr.featuresChosen) === 1, JSON.stringify(fr));
+    sv = await api('POST', `/owenenterprises/features/edit/${P.id}`, { token: P.token, body: { chkBgtracker: 0, chkCommunityLibrary: 0, chkMeetings: 0, chkChurch: 0 } });
+    fr = await fx(P);
+    check('everything off can be saved (no "at least one" rule)', sv.status === 200 && ['chkBgtracker', 'chkCommunityLibrary', 'chkMeetings', 'chkChurch'].every((k) => Number(fr[k]) === 0), JSON.stringify(fr));
+    await q(dbs.owenenterprises, 'DELETE FROM feature_preferences WHERE user_id=?', [P.id]);
+    await q(dbs.owenenterprises, 'INSERT INTO feature_preferences (user_id, chkBgtracker) VALUES (?, 0)', [P.id]);
+    fr = await fx(P);
+    check('a row that predates featuresChosen counts as chosen (column default 1)', Number(fr.featuresChosen) === 1, JSON.stringify(fr));
 
     if (MODE === 'off') {
       section('Gate off: pass-through');

@@ -5,6 +5,8 @@ import CardActionArea from '@mui/material/CardActionArea';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import Badge from '@mui/material/Badge';
+import Button from '@mui/material/Button';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useBorrowBadge } from '../hooks/useBorrowBadge';
 
@@ -128,8 +130,15 @@ export default function Landing() {
           Welcome{state.user.firstName ? `, ${state.user.firstName}` : ''}
         </Typography>
         <Typography sx={sxStyles.subtitle}>
-          Select a feature to get started
+          {features.length > 0 || !featurePreferences.loaded
+            ? 'Select a feature to get started'
+            : 'Nothing is turned on yet. Choose what you would like under Feature access.'}
         </Typography>
+        {features.length === 0 && featurePreferences.loaded && (
+          <Button variant="contained" component={RouterLink} to="/feature-preferences" sx={{ mt: 1 }}>
+            Choose features
+          </Button>
+        )}
         <div style={sxStyles.grid}>
           {features.map((f) => (
             <Card key={f.key} sx={sxStyles.card} style={{ background: f.bg }} elevation={4}>

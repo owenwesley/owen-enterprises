@@ -10,14 +10,15 @@ export function useFeaturePreferences() {
     if (!user_id) return;
     const data = await getFetch(`/owenenterprises/features/${user_id}`);
     if (data?.results) {
-      dispatch({ type: 'SET_FEATURE_PREFS', payload: data.results });
+      dispatch({ type: 'SET_FEATURE_PREFS', payload: { ...data.results, loaded: true } });
     }
   }, [dispatch]);
 
   const saveFeaturePreferences = useCallback(async (prefs) => {
     if (!user.id) return;
     await postFetch(`/owenenterprises/features/edit/${user.id}`, prefs);
-    dispatch({ type: 'SET_FEATURE_PREFS', payload: { ...state.featurePreferences, ...prefs } });
+    // Any save counts as having chosen (the server sets featuresChosen = 1 the same way).
+    dispatch({ type: 'SET_FEATURE_PREFS', payload: { ...state.featurePreferences, ...prefs, featuresChosen: 1 } });
   }, [user.id, state.featurePreferences, dispatch]);
 
   return { loadFeaturePreferences, saveFeaturePreferences };

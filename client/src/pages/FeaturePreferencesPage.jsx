@@ -5,6 +5,7 @@ import Switch from '@mui/material/Switch';
 import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
 import Divider from '@mui/material/Divider';
+import { useHistory } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useFeaturePreferences } from '../hooks/useFeaturePreferences';
 
@@ -110,42 +111,65 @@ export default function FeaturePreferencesPage() {
   const { state } = useAppContext();
   const { featurePreferences } = state;
   const { saveFeaturePreferences } = useFeaturePreferences();
+  const history = useHistory();
+  // A brand-new account that has never saved this page (see FirstSignInRedirect in NavBar).
+  // Captured once so the welcome wording stays while they work, even after a save.
+  const [firstTime] = useState(() => featurePreferences.loaded && Number(featurePreferences.featuresChosen) === 0);
 
-  // Local copy so the user can toggle without immediately saving
-  const [local, setLocal] = useState({ ...featurePreferences });
+  const pick = (p) => ({
+    chkBgtracker: p.chkBgtracker === 1 ? 1 : 0,
+    chkCommunityLibrary: p.chkCommunityLibrary === 1 ? 1 : 0,
+    chkMeetings: p.chkMeetings === 1 ? 1 : 0,
+    chkChurch: p.chkChurch === 1 ? 1 : 0,
+  });
+
+  // Local copy so the user can toggle without immediately saving. Only the four switches.
+  const [local, setLocal] = useState(pick(featurePreferences));
   const [saved,  setSaved]  = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Sync if featurePreferences loads after mount
   useEffect(() => {
-    setLocal({ ...featurePreferences });
+    setLocal(pick(featurePreferences));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featurePreferences]);
 
   const toggle = (key) => {
-    setLocal((prev) => {
-      const next = { ...prev, [key]: prev[key] ? 0 : 1 };
-      // Must keep at least one feature enabled
-      const anyEnabled = Object.values(next).some((v) => v === 1);
-      return anyEnabled ? next : prev;
-    });
+    // Everything may be off: a member who wants none of it is allowed to.
+    setLocal((prev) => ({ ...prev, [key]: prev[key] ? 0 : 1 }));
     setSaved(false);
   };
 
   const onSave = async () => {
     setSaving(true);
-    await saveFeaturePreferences(local);
-    setSaving(false);
-    setSaved(true);
+    try {
+      await saveFeaturePreferences(local);
+      setSaved(true);
+      if (firstTime) history.push('/');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const enabledCount = Object.values(local).filter((v) => v === 1).length;
+  // "Skip for now": saves everything as it stands (all off) so the prompt does not come back.
+  const onSkip = async () => {
+    setSaving(true);
+    try {
+      await saveFeaturePreferences(pick({}));
+      history.push('/');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div style={sxStyles.wrapper}>
       <Paper sx={sxStyles.card} elevation={6}>
-        <Typography sx={sxStyles.header}>Feature Access</Typography>
+        <Typography sx={sxStyles.header}>{firstTime ? 'Welcome! What would you like to use?' : 'Feature Access'}</Typography>
         <Typography sx={sxStyles.sub}>
-          Choose which features appear on your landing page.
+          {firstTime
+            ? 'Everything is off to start. Turn on what you want; you can change this any time under Feature access.'
+            : 'Choose which features appear on your landing page.'}
         </Typography>
 
         {FEATURES.map((f, i) => (
@@ -168,9 +192,10 @@ export default function FeaturePreferencesPage() {
           </React.Fragment>
         ))}
 
-        {enabledCount === 1 && (
+        {local.chkBgtracker === 1 && (
           <Typography sx={sxStyles.warning}>
-            At least one feature must stay enabled.
+            BG Tracker holds health information. Turning it on means you will be asked to set up
+            two-step sign-in and accept the privacy consent forms before it opens.
           </Typography>
         )}
 
@@ -180,8 +205,13 @@ export default function FeaturePreferencesPage() {
           onClick={onSave}
           disabled={saving}
         >
-          {saving ? 'Saving…' : 'Save Preferences'}
+          {saving ? 'Saving…' : firstTime ? 'Save and continue' : 'Save Preferences'}
         </Button>
+        {firstTime && (
+          <Button sx={{ mt: 1, width: '100%' }} variant="text" onClick={onSkip} disabled={saving}>
+            Skip for now
+          </Button>
+        )}
 
         {saved && (
           <div style={{ textAlign: 'center' }}>

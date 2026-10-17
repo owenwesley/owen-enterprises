@@ -90,17 +90,17 @@ router.post('/signup', async (req, res) => {
     }
     await conn.commit();
 
-    // Auto-create feature_preferences. BG Tracker starts OFF for an ordinary
-    // sign-up (they are a "member" until they switch it on); a doctor starts with
-    // it on (see utils/featureDefaults.js). Awaited so an error is logged in order
+    // Auto-create feature_preferences. Everything starts OFF for an ordinary
+    // sign-up (a "member" until they switch BG Tracker on; featuresChosen=0 sends them to
+    // Feature access once); a doctor starts with BG Tracker on (see utils/featureDefaults.js). Awaited so an error is logged in order
     // rather than racing the response below; a missing row is treated as "off" by
     // the HIPAA gate and is re-created with these same defaults on the first GET.
     try {
       const f = defaultFeaturePrefs(isDoctor ? 'doctor' : 'patient');
       await query(
-        'INSERT IGNORE INTO feature_preferences (user_id, chkBgtracker, chkCommunityLibrary, chkMeetings, chkChurch) ' +
-        'VALUES (?, ?, ?, ?, ?)',
-        [ins.insertId, f.chkBgtracker, f.chkCommunityLibrary, f.chkMeetings, f.chkChurch]
+        'INSERT IGNORE INTO feature_preferences (user_id, chkBgtracker, chkCommunityLibrary, chkMeetings, chkChurch, featuresChosen) ' +
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        [ins.insertId, f.chkBgtracker, f.chkCommunityLibrary, f.chkMeetings, f.chkChurch, f.featuresChosen]
       );
     } catch (prefErr) {
       console.error('feature_preferences insert failed:', prefErr.message);

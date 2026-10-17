@@ -13,8 +13,12 @@ const _session = loadSession();
 export const InitialState = {
   token: _session.token || null,
   activeFeature: null,
+  // Everything off until the server answers. featuresChosen starts at 1 and `loaded` at false so
+  // nothing redirects or shows "nothing turned on" before the real values arrive; the server sends
+  // featuresChosen 0 for a brand-new account (see FirstSignInRedirect in NavBar).
   featurePreferences: {
-    chkBgtracker: 0, chkCommunityLibrary: 1, chkMeetings: 1, chkChurch: 0,
+    chkBgtracker: 0, chkCommunityLibrary: 0, chkMeetings: 0, chkChurch: 0,
+    featuresChosen: 1, loaded: false,
   },
   users: [],
   user: _session.user

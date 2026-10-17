@@ -174,6 +174,24 @@ function HipaaRedirect() {
   return null;
 }
 
+// A brand-new member (featuresChosen 0) lands on Feature access once, from the home page only,
+// so nothing is trapped: "Skip for now" there saves everything off and ends the prompt.
+// Doctors and admins never get it (the server creates doctor rows with featuresChosen 1).
+function FirstSignInRedirect() {
+  const history = useHistory();
+  const { pathname } = useLocation();
+  const { state } = useAppContext();
+  const fp = state.featurePreferences;
+  const role = state.user.role;
+  useEffect(() => {
+    if (state.user.isLogedIn && fp.loaded && Number(fp.featuresChosen) === 0
+        && role !== 'doctor' && role !== 'admin' && pathname === '/') {
+      history.replace('/feature-preferences');
+    }
+  }, [state.user.isLogedIn, fp.loaded, fp.featuresChosen, role, pathname, history]);
+  return null;
+}
+
 // A nav link's text, with the meeting logo in front of it when the item asks for one (n.logo).
 function NavLabel({ n }) {
   if (!n.logo) return n.label;
@@ -381,6 +399,7 @@ export default function NavBar() {
       <div className="app-shell">
       <ResetEditOnNavigate />
       <HipaaRedirect />
+      <FirstSignInRedirect />
       {user.isLogedIn && <TopBar navItems={navItems} />}
 
       <div className="app-content">
