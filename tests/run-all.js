@@ -37,6 +37,7 @@ const SUITES = [
   { name: 'mfa',       file: 'mfa.js',                     server: 'hipaa' },
   { name: 'totp',      file: 'totp.js',                    server: 'hipaa' },
   { name: 'mfalockout', file: 'mfa-lockout.js',           server: 'plain' },
+  { name: 'schema',    file: 'schema-parse.js',            server: null },
   { name: 'env',       file: 'env-loader.js',              server: null },
   { name: 'mfaredis',  file: 'mfa-redis.js',               server: null },
   { name: 'twilio',    file: 'twilio-request.js',          server: null },

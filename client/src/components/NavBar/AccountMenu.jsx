@@ -108,7 +108,10 @@ export default function AccountMenu({ compact = false }) {
         <Divider />
 
         {linkItem('/profile', <AccountCircleIcon fontSize="small" />, 'My profile')}
-        {linkItem('/security', <SettingsIcon fontSize="small" />, 'Two-step sign-in')}
+        {/* Two-step sign-in is only needed for BG Tracker (the HIPAA gate asks for it), so a member
+            who has not turned BG Tracker on does not see it. Doctors and admins always do. */}
+        {(featurePreferences.chkBgtracker === 1 || user.role === 'doctor' || user.role === 'admin') &&
+          linkItem('/security', <SettingsIcon fontSize="small" />, 'Two-step sign-in')}
         {isPatient && featurePreferences.chkBgtracker === 1 &&
           linkItem('/my-doctors', <LocalHospitalIcon fontSize="small" />, 'My doctors')}
         {isPatient && photosOn && featurePreferences.chkBgtracker === 1 && linkItem('/my-photos', <PhotoCameraIcon fontSize="small" />, 'My photos')}

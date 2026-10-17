@@ -113,6 +113,9 @@ const TABLES = {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
     {
+      // featuresChosen: 0 = new account that has not saved Feature Access yet (sent there once); DEFAULT 1 on purpose so
+      // rows that already exist count as chosen, and signup writes 0. Keep SQL comments OUT of these definitions: schemaSync
+      // splits the text into columns and a '--' line would swallow the column after it.
       name: 'feature_preferences',
       sql: `CREATE TABLE IF NOT EXISTS feature_preferences (
         id                  INT        AUTO_INCREMENT PRIMARY KEY,
@@ -121,8 +124,6 @@ const TABLES = {
         chkCommunityLibrary TINYINT(1) NOT NULL DEFAULT 0,
         chkMeetings         TINYINT(1) NOT NULL DEFAULT 0,
         chkChurch           TINYINT(1) NOT NULL DEFAULT 0,
-        -- 0 = new account that has not yet saved Feature access (it is sent there once).
-        -- DEFAULT 1 on purpose: rows that already exist count as chosen; signup writes 0.
         featuresChosen      TINYINT(1) NOT NULL DEFAULT 1
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     },
